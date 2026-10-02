@@ -190,7 +190,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
       <span class="chip" id="ptChip">已投 <b id="cnt">0</b> / <span id="capPts">77</span> 點</span>
       <span class="chip" id="modeChip">投點模式</span>
       <select id="startSel" class="startsel" aria-label="選擇起點"></select>
-      <span class="search" id="searchBox"><input id="search" type="search" placeholder="搜尋天賦（空格＝同時包含，｜＝或）" aria-label="搜尋天賦" autocomplete="off"><span id="searchCnt"></span><button id="sPrev" aria-label="上一個">‹</button><button id="sNext" aria-label="下一個">›</button></span>
+      <span class="search" id="searchBox"><input id="search" type="search" placeholder="搜尋天賦（空格＝且，｜＝或，-詞＝排除）" title="例：暴擊 -短杖　　拳套 投射物　　敏捷｜智力" aria-label="搜尋天賦" autocomplete="off"><span id="searchCnt"></span><button id="sPrev" aria-label="上一個">‹</button><button id="sNext" aria-label="下一個">›</button></span>
       <span class="chip" id="startChip" style="color:var(--start);border-color:var(--start)">← 請先選擇起點</span>
     </div>
     <div class="zoom">
@@ -1234,9 +1234,11 @@ function nodeText(n){ const c=C(n); const parts=[dispName(n)];
   return norm(parts.join('\n')); }
 function runSearch(){
   const raw=$('search').value.trim(); searchQ=raw;
-  const groups=raw.split(/[|｜,，]/).map(g=>g.trim().split(/\s+/).map(norm).filter(Boolean)).filter(g=>g.length);
+  // words: space = AND, ｜/, = OR, leading - or ！ = exclude (applies to every OR group)
+  const excl=[]; const groups=raw.split(/[|｜,，]/).map(g=>g.trim().split(/\s+/).filter(w=>{ const m=w.match(/^[-－!！](.+)$/); if(m){ const x=norm(m[1]); if(x) excl.push(x); return false; } return true; }).map(norm).filter(Boolean)).filter(g=>g.length);
+  if(!groups.length&&excl.length) groups.push([]);
   searchSet=new Set(); searchList=[];
-  if(groups.length){ for(const n of board.nodes){ if(isJunction(n)) continue; const tx=nodeText(n); if(groups.some(g=>g.every(w=>tx.includes(w)))){ searchSet.add(n.id); searchList.push(n); } }
+  if(groups.length){ for(const n of board.nodes){ if(isJunction(n)) continue; const tx=nodeText(n); if(excl.some(w=>tx.includes(w))) continue; if(groups.some(g=>g.every(w=>tx.includes(w)))){ searchSet.add(n.id); searchList.push(n); } }
     const cx=vb.x+vb.w/2, cy=vb.y+vb.h/2; searchList.sort((a,b)=>Math.atan2(a.y,a.x)-Math.atan2(b.y,b.x)||((a.x-cx)**2+(a.y-cy)**2)-((b.x-cx)**2+(b.y-cy)**2)); }
   searchCur=null;
   $('searchCnt').textContent=raw?(searchList.length?`${searchList.length} 個`:'無符合'):'';

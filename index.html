@@ -127,6 +127,17 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .sublabel code{font:12px var(--f-mono);color:var(--accent)}
 .totals .attr{font-weight:700;font-size:14px}
 .totals .sepb{padding-bottom:6px;margin-bottom:4px;border-bottom:1px solid var(--line)}
+.totals .tot{cursor:pointer}
+.totals dt.tot::before{content:'▸';display:inline-block;width:12px;color:var(--muted);font-size:10px;transition:transform .15s}
+.totals dt.tot.open::before{transform:rotate(90deg)}
+.totals dt.fx.tot::before{content:'▸'}
+.totals dd.srcs{grid-column:1/-1;margin:2px 0 6px 12px;text-align:left;font:12px var(--f-ui);color:var(--muted)}
+.totals dd.srcs ul{list-style:none;margin:0;padding:0 0 0 8px;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+.src-it{all:unset;box-sizing:border-box;cursor:pointer;display:flex;justify-content:space-between;gap:8px;width:100%;padding:2px 6px;border-radius:4px}
+.src-it:hover,.src-it:focus-visible{background:#24242b;color:var(--fg);outline:none}
+.src-it i{font-style:normal;color:var(--accent);font-family:var(--f-mono)}
+.src-it small{color:var(--muted);font-size:11px;margin-left:4px}
+.src-it em{font-style:normal;font-family:var(--f-mono);color:var(--fg);white-space:nowrap}
 .totals dt.fx{color:#cfc6ff}
 .totals dt.fx::before{content:'◆ ';color:var(--muted);font-size:10px}
 .totals dt{min-width:0;overflow-wrap:anywhere}
@@ -142,6 +153,14 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .qrow{display:grid;grid-template-columns:minmax(0,1fr) 52px 48px 28px;gap:4px;align-items:center}
 .qrow button{padding:4px 0;width:28px}
 .qhead{font-size:11px;color:var(--muted)}
+.nb-cnt{color:var(--accent);letter-spacing:0;font-family:var(--f-mono)}
+.nb-list{display:flex;flex-direction:column;gap:6px}
+.nb-item{all:unset;box-sizing:border-box;display:block;cursor:pointer;border:1px solid var(--line);border-left:3px solid var(--notable);border-radius:6px;padding:6px 8px;background:#1b1b20}
+.nb-item:hover,.nb-item:focus-visible{border-color:var(--notable);outline:none}
+.nb-item b{display:block;font-size:13px;color:var(--fg)}
+.nb-item span{display:block;font-size:12px;color:var(--muted);line-height:1.5}
+.sh-in{display:flex;gap:6px;align-items:stretch}
+.sh-in textarea{flex:1;min-width:0;height:auto;font:11px var(--f-mono);resize:vertical;word-break:break-all}
 .tpl-list{display:flex;flex-direction:column;gap:4px}
 .tpl-item{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:4px;align-items:center;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:6px}
 .tpl-item[aria-current="true"]{border-color:var(--accent)}
@@ -226,6 +245,11 @@ button:disabled{opacity:.45;cursor:not-allowed}
       <h2>加成總計</h2>
       <dl class="totals" id="totals"></dl>
       <p class="warnline" id="unpicked" hidden></p>
+    </section>
+
+    <section id="notableSec">
+      <h2>已點大節點 <span id="notableCnt" class="nb-cnt"></span></h2>
+      <div id="notableList" class="nb-list"></div>
     </section>
 
     <section id="editPanel" hidden>
@@ -313,6 +337,11 @@ button:disabled{opacity:.45;cursor:not-allowed}
       <div class="row"><button id="bSave" class="primary">儲存流派</button><button id="bOpen">讀取流派…</button></div>
       <input type="file" id="bFile" accept=".json,application/json" hidden aria-label="讀取配點">
       <textarea id="bBox" hidden aria-label="配點內容" style="margin-top:8px"></textarea>
+      <div class="row" style="margin-top:10px"><button id="shCopy">複製分享碼</button><button id="shLink" hidden>複製分享連結</button></div>
+      <div class="sh-in" style="margin-top:8px">
+        <textarea id="shIn" rows="2" placeholder="貼上分享碼（LT1 開頭）" aria-label="貼上分享碼"></textarea>
+        <button id="shLoad">讀取分享碼</button>
+      </div>
       <p class="note" style="margin-top:6px">目前的流派會自動記在這個瀏覽器；儲存的檔案會記錄天賦版本，讀取時自動切換到該版本。</p>
     </section>
 
@@ -398,7 +427,7 @@ function render(){
     const html=`<option value="">選擇起點…</option>`+board.startIds.map(id=>`<option value="${id}">${esc(dispName(byId.get(id))||id)}</option>`).join('');
     if(s.dataset.h!==html){s.innerHTML=html;s.dataset.h=html;} s.value=cur; s.hidden=mode!=='play'; }
   $('stats').textContent=`${board.nodes.length} 節點 · ${board.edges.length} 連線 · ${board.startIds.length} 個起點`;
-  renderInfo(); renderTotals(); scheduleSave();
+  renderInfo(); renderTotals(); renderNotables(); scheduleSave();
   { const n=spent(), cap=capPts(), L=needLevel(n); $('capPts').textContent=cap; $('lvNeed').textContent=L?`Lv ${L}`:`超過 Lv ${prog().maxLevel}`;
     $('ptChip').classList.toggle('over',n>cap); $('lvChip').classList.toggle('over',!L); $('progSec').hidden=mode!=='edit'; }
   { const need=board.nodes.filter(n=>!isJunction(n)); const e=need.filter(n=>!hasContent(n)).length; $('emptyCnt').textContent=`未設定 ${e} / ${need.length}`; $('nextEmpty').disabled=!e; }
@@ -473,6 +502,7 @@ function reachable(){
   const r=new Set();
   for(const id of alloc) for(const m of adj.get(id)) r.add(m);
   for(const id of alloc) r.delete(id);
+  for(const s of board.startIds) r.delete(s);
   return r;
 }
 function shortestPath(target){
@@ -488,7 +518,7 @@ function shortestPath(target){
     if(u===target) break;
     const nu=byId.get(u);
     for(const v of adj.get(u)){
-      if(alloc.has(v)) continue;
+      if(alloc.has(v)||isStart(v)) continue; // never route through another start
       const nv=byId.get(v); const nc=c+(isStart(v)?0:1), nd=d+Math.hypot(nv.x-nu.x,nv.y-nu.y);
       const bv=best.get(v);
       if(!bv||nc<bv[0]||(nc===bv[0]&&nd<bv[1]-1e-9)){best.set(v,[nc,nd]);prev.set(v,u);push(nc,nd,v);}
@@ -508,7 +538,7 @@ function orphansAfterRemoving(id){
 }
 function clickPlay(id){
   const conn=$('ruleConn').checked;
-  if(conn&&isStart(id)&&(!hasStart()||alloc.has(id))){ toast(alloc.has(id)?'要更換起點請用左上角的下拉選單':'請從左上角的下拉選單選擇起點'); return; }
+  if(conn&&isStart(id)){ toast(alloc.has(id)?'要更換起點請用左上角的下拉選單':(hasStart()?'不能同時點選其他起點，要更換請用左上角的下拉選單':'請從左上角的下拉選單選擇起點')); return; }
   if(alloc.has(id)&&C(byId.get(id)).choice){
     // end of the allocated branch: remove directly; otherwise (later nodes depend on it) let the player change the pick
     if(conn&&board.startIds.length&&orphansAfterRemoving(id).length){ openPicker(id); return; }
@@ -547,7 +577,7 @@ function allocClick(id,conn){
   if(!hasStart()){
     toast('請先從左上角的下拉選單選擇起點');return;
   }
-  if([...adj.get(id)].some(m=>alloc.has(m))){allocate([id]);return;}
+  if([...adj.get(id)].some(m=>alloc.has(m))&&!isStart(id)){allocate([id]);return;}
   const p=shortestPath(id);
   if(!p){toast('此節點無法從已投節點連到');return;}
   const cost=p.filter(x=>!isStart(x)).length;
@@ -617,9 +647,40 @@ function totals(){
     if(cc.choice){ if(hasPick(id)) list.push(...cc.choice.options[picks.get(id)].modifiers); else un++; }
     for(const x of list){ if(!x.stat) continue; const sl=slotsOf(x); const key=x.stat+'|'+sl.map(s=>s.unit).join(',');
       const cur=m.get(key)||{stat:x.stat,text:sl[0].unit==='text',count:0,slots:sl.map(s=>({value:0,unit:s.unit}))};
+      cur.key=key; (cur.src=cur.src||[]).push({id,sl});
       cur.count++; sl.forEach((s,j)=>{cur.slots[j].value+=(+s.value||0);}); m.set(key,cur); }}
   return {m,un};
 }
+function renderNotables(){
+  const list=board.nodes.filter(n=>n.kind==='notable'&&alloc.has(n.id));
+  $('notableCnt').textContent=list.length?list.length:'';
+  if(!list.length){ $('notableList').innerHTML='<p class="note">尚未點選大節點</p>'; return; }
+  $('notableList').innerHTML=list.map(n=>{ const s=nodeSummary(n.id); return `<button class="nb-item" data-id="${n.id}"><b>${esc(s.name)}</b>${s.text?s.text.split('、').map(x=>`<span>${esc(x)}</span>`).join(''):''}</button>`; }).join('');
+}
+$('notableList').addEventListener('click',ev=>{ const b=ev.target.closest('.nb-item'); if(!b) return; const n=byId.get(b.dataset.id); if(!n) return;
+  sel=n.id; if(vb.w>460){const f=400/vb.w; vb.w*=f; vb.h*=f;} vb.x=n.x-vb.w/2; vb.y=n.y-vb.h/2; setVB(); render(); });
+const totOpen=new Set();
+function srcVal(r,sl){ if(r.text) return ''; return sl.map(s=>fmtVal(s.value,s.unit)).join('、'); }
+function decorateTot(r,html){
+  const open=totOpen.has(r.key), k=esc(r.key);
+  html=html.replace('<dt',`<dt data-k="${k}" class="tot${open?' open':''}"`).replace(/^(<dt[^>]*?) class="tot( open)?" class="/,'$1 class="tot$2 ').replace('<dd',`<dd data-k="${k}" `);
+  html=html.replace(/<dt([^>]*)class="tot( open)? ([^"]*)"/,'<dt$1class="tot$2 $3"');
+  if(!open) return html;
+  const g=new Map();
+  for(const s of r.src){ const name=dispName(byId.get(s.id))||'天賦'; const v=srcVal(r,s.sl); const gk=name+'|'+v; const e=g.get(gk)||{name,v,sl:s.sl,ids:[]}; e.ids.push(s.id); g.set(gk,e); }
+  for(const e of g.values()) if(e.ids.length>1&&!r.text) e.v=`${e.v}<small> 共 ${e.sl.map(s=>fmtVal(s.value*e.ids.length,s.unit)).join('、')}</small>`;
+  const sepb=html.includes('sepb'); if(sepb) html=html.replace(/ sepb/g,'');
+  const items=[...g.values()].sort((a,b)=>b.ids.length-a.ids.length||a.name.localeCompare(b.name,'zh-Hant'));
+  return html+`<dd class="srcs${sepb?' sepb':''}"><ul>${items.map(e=>`<li><button class="src-it" data-ids="${e.ids.join(',')}" title="點擊跳到節點，連點可循環"><span>${esc(e.name)}${e.ids.length>1?` <i>×${e.ids.length}</i>`:''}</span><em>${e.v}</em></button></li>`).join('')}</ul></dd>`;
+}
+$('totals').addEventListener('click',ev=>{
+  const it=ev.target.closest('.src-it');
+  if(it){ const ids=it.dataset.ids.split(','); let i=+(it.dataset.i||-1); i=(i+1)%ids.length; it.dataset.i=i; const n=byId.get(ids[i]); if(!n) return;
+    sel=n.id; if(vb.w>460){const f=400/vb.w; vb.w*=f; vb.h*=f;} vb.x=n.x-vb.w/2; vb.y=n.y-vb.h/2; setVB(); const keep=it.dataset.ids,ki=i; render();
+    const again=$('totals').querySelector(`.src-it[data-ids="${keep}"]`); if(again) again.dataset.i=ki; return; }
+  const row=ev.target.closest('[data-k]'); if(!row) return;
+  const k=row.dataset.k; if(totOpen.has(k)) totOpen.delete(k); else totOpen.add(k); renderTotals();
+});
 function renderTotals(){
   const {m,un}=totals();
   const all=[...m.values()].sort((a,b)=>a.stat.localeCompare(b.stat,'zh-Hant'));
@@ -627,12 +688,12 @@ function renderTotals(){
   const isAttr=r=>!r.text&&ATTR.includes(r.stat);
   const attrs=all.filter(isAttr).sort((a,b)=>ATTR.indexOf(a.stat)-ATTR.indexOf(b.stat)||a.slots[0].unit.localeCompare(b.slots[0].unit));
   const rows=[...attrs,...all.filter(r=>!r.text&&!isAttr(r)),...all.filter(r=>r.text)];
-  $('totals').innerHTML=rows.length?rows.map(r=>{
+  $('totals').innerHTML=rows.length?rows.map(r=>decorateTot(r,(()=>{
       const sep=(r===attrs[attrs.length-1]&&rows.length>attrs.length)?' sepb':'';
       if(r.text) return `<dt class="fx">${esc(r.stat.split('{v}').join(''))}</dt><dd>${r.count>1?'×'+r.count:''}</dd>`;
       if(r.stat.includes('{v}')){const parts=r.stat.split('{v}');let h='';parts.forEach((p,j)=>{h+=esc(p);if(j<parts.length-1){const x=r.slots[Math.min(j,r.slots.length-1)];h+=`<b class="tv">${fmtVal(x.value,x.unit)}</b>`;}});return `<dt>${h}</dt><dd></dd>`;}
       if(isAttr(r)) return `<dt class="attr${sep}">${esc(r.stat)}</dt><dd class="attr${sep}">${fmtVal(r.slots[0].value,r.slots[0].unit)}</dd>`;
-      return `<dt>${esc(r.stat)}</dt><dd>${fmtVal(r.slots[0].value,r.slots[0].unit)}</dd>`;}).join('')
+      return `<dt>${esc(r.stat)}</dt><dd>${fmtVal(r.slots[0].value,r.slots[0].unit)}</dd>`;})())).join('')
     :`<dt class="note">${alloc.size?'已投節點還沒有設定內容':'尚未投點'}</dt><dd></dd>`;
   $('unpicked').hidden=!un; $('unpicked').textContent=`有 ${un} 個可選擇節點尚未選擇，點選該節點後按「選擇」。`;
 }
@@ -1045,7 +1106,7 @@ function carryBuild(prevAlloc,prevPicks){
   const st=board.startIds.find(x=>prevAlloc.includes(x)); alloc=new Set(); picks=new Map();
   if(!st) return prevAlloc.filter(x=>!isStart(x)).length;
   const want=new Set(prevAlloc.filter(x=>byId.has(x))); const seen=new Set([st]); const q=[st];
-  while(q.length){const u=q.shift(); for(const v of adj.get(u)) if(want.has(v)&&!seen.has(v)){seen.add(v);q.push(v);} }
+  while(q.length){const u=q.shift(); for(const v of adj.get(u)) if(want.has(v)&&!seen.has(v)&&!isStart(v)){seen.add(v);q.push(v);} }
   alloc=seen;
   for(const [id,k] of prevPicks){ const c=byId.get(id)&&C(byId.get(id)); if(alloc.has(id)&&c&&c.choice&&c.choice.options[k]) picks.set(id,k); }
   return prevAlloc.filter(x=>!isStart(x)).length-spent();
@@ -1083,7 +1144,7 @@ async function openBuild(s){
 function applyBuild(s,quiet){
   if(!s||!Array.isArray(s.alloc)) throw new Error('不是配點檔案');
   const miss=s.alloc.filter(id=>!byId.has(id));
-  alloc=new Set(s.alloc.filter(id=>byId.has(id))); picks=new Map((s.picks||[]).filter(([id])=>alloc.has(id)));
+  { const st=s.alloc.find(id=>isStart(id)&&byId.has(id)); alloc=new Set(s.alloc.filter(id=>byId.has(id)&&(!isStart(id)||id===st))); } picks=new Map((s.picks||[]).filter(([id])=>alloc.has(id)));
   lastPick=s.lastPick||{}; $('autoPick').checked=s.autoPick3===true; pickQueue=[]; pendingBatch=null; $('picker').hidden=true;
   render();
   const warn=(s.boardVersion&&s.boardVersion!==(board.version||''))?`（此配點是在 ${s.boardVersion} 建立，目前是 ${board.version||'未標版本'}）`:'';
@@ -1101,6 +1162,49 @@ async function saveBuild(){
   if(await saveText(`build_${ds}_${spent()}pt.json`,JSON.stringify(buildData(),null,2))) toast(`已儲存流派（${board.version||'未標版本'}）`);
 }
 $('bSave').onclick=saveBuild;
+/* ---------- share code: LT1 + base64url( version | start | sorted node ids (delta varint) | picks ) ---------- */
+const SH_PREFIX='LT1';
+function vPush(a,n){ n=Math.max(0,Math.floor(n)); while(n>=128){a.push((n&127)|128); n=Math.floor(n/128);} a.push(n); }
+function vRead(b,p){ let n=0,m=1,x; do{ if(p.i>=b.length) throw new Error('分享碼不完整'); x=b[p.i++]; n+=(x&127)*m; m*=128; }while(x&128); return n; }
+const idNum=id=>{const k=+String(id).slice(1); if(!/^n\d+$/.test(id)) throw new Error('節點 id 格式不支援：'+id); return k;};
+function b64u(bytes){ let s=''; for(const x of bytes) s+=String.fromCharCode(x); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+function unb64u(s){ s=s.replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4) s+='='; const bin=atob(s); return Uint8Array.from(bin,c=>c.charCodeAt(0)); }
+function encodeShare(){
+  const st=board.startIds.find(x=>alloc.has(x)); if(!st) throw new Error('請先選擇起點並投點');
+  const a=[]; const ver=new TextEncoder().encode(board.version||'');
+  vPush(a,ver.length); ver.forEach(x=>a.push(x));
+  vPush(a,idNum(st));
+  const ids=[...alloc].filter(x=>!isStart(x)).map(idNum).sort((x,y)=>x-y);
+  vPush(a,ids.length); let prev=0; for(const k of ids){ vPush(a,k-prev); prev=k; }
+  const pk=[...picks].filter(([id])=>alloc.has(id)).map(([id,k])=>[idNum(id),k]).sort((x,y)=>x[0]-y[0]);
+  vPush(a,pk.length); prev=0; for(const [id,k] of pk){ vPush(a,id-prev); prev=id; vPush(a,k); }
+  let sum=0; for(const x of a) sum=(sum*31+x)%251; a.push(sum);
+  return SH_PREFIX+b64u(a);
+}
+function decodeShare(code){
+  code=String(code||'').trim().replace(/^.*#/,'').replace(/\s+/g,'');
+  if(!code.startsWith(SH_PREFIX)) throw new Error('不是分享碼（應以 LT1 開頭）');
+  let b; try{ b=unb64u(code.slice(SH_PREFIX.length)); }catch(e){ throw new Error('分享碼含有無效字元'); }
+  if(b.length<4) throw new Error('分享碼不完整');
+  let sum=0; for(let i=0;i<b.length-1;i++) sum=(sum*31+b[i])%251; if(sum!==b[b.length-1]) throw new Error('分享碼不完整或被修改過（檢查碼不符）');
+  const p={i:0}; const vl=vRead(b,p); const ver=new TextDecoder().decode(b.slice(p.i,p.i+vl)); p.i+=vl;
+  const st='n'+vRead(b,p); const n=vRead(b,p); const allocL=[st]; let prev=0; for(let i=0;i<n;i++){ prev+=vRead(b,p); allocL.push('n'+prev); }
+  const m=vRead(b,p); const pk=[]; prev=0; for(let i=0;i<m;i++){ prev+=vRead(b,p); pk.push(['n'+prev,vRead(b,p)]); }
+  return {type:'tli-build',boardVersion:ver,start:st,alloc:allocL,picks:pk,lastPick,autoPick3:$('autoPick').checked};
+}
+async function copyText(s,okMsg){
+  try{ await navigator.clipboard.writeText(s); toast(okMsg); }
+  catch(e){ $('shIn').value=s; $('shIn').focus(); $('shIn').select(); toast('無法寫入剪貼簿，已放到下方文字框並選取，請手動複製'); }
+}
+$('shCopy').onclick=()=>{ try{ const c=encodeShare(); copyText(c,`已複製分享碼（${c.length} 字元，${board.version||'未標版本'}）`); }catch(e){ toast(e.message); } };
+$('shLink').hidden=inFrame;
+$('shLink').onclick=()=>{ try{ copyText(location.href.split('#')[0]+'#'+encodeShare(),'已複製分享連結'); }catch(e){ toast(e.message); } };
+async function loadShare(code){ const s=decodeShare(code); await openBuild(s); scheduleSave(); }
+$('shLoad').onclick=async()=>{ const v=$('shIn').value; if(!v.trim()){ toast('請先貼上分享碼'); return; }
+  try{ await loadShare(v); $('shIn').value=''; }catch(e){ showAlert('無法讀取分享碼',esc(e.message)); } };
+$('shIn').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); $('shLoad').click(); } });
+async function loadShareFromHash(){ const h=decodeURIComponent(location.hash.slice(1)); if(!h.startsWith(SH_PREFIX)) return false;
+  try{ await loadShare(h); history.replaceState(null,'',location.pathname+location.search); return true; }catch(e){ showAlert('無法讀取分享連結',esc(e.message)); return false; } }
 $('bOpen').onclick=()=>$('bFile').click();
 $('bFile').onchange=async ev=>{ const f=ev.target.files[0]; if(!f) return; try{ await openBuild(JSON.parse(await f.text())); scheduleSave(); }catch(e){ toast('讀取失敗：'+e.message); } ev.target.value=''; };
 
@@ -1161,6 +1265,7 @@ async function boot(){
   try{ useBoard(await fetchBoard(verEntry(v)),verEntry(v).file,false); }catch(e){ fail(e.message||e); return; }
   setTool('select'); setMode('play');
   if(s&&s.boardVersion===board.version){ try{ applyBuild(s,true); }catch(e){} }
+  if(await loadShareFromHash()) { render(); updFileState(); return; }
   if(!isLatest(board.version)) toast(`目前顯示上次使用的 ${board.version}，最新版本為 ${latestVer()}`);
   render(); updFileState();
 }

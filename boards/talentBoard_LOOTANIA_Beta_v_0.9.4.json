@@ -12378,15 +12378,41 @@
       "y": -126,
       "kind": "minor",
       "size": 2.5,
-      "confidence": "placeholder",
+      "confidence": "verified",
       "modifiers": [
         {
-          "stat": "攻擊力",
+          "stat": "攻擊流血機率",
           "value": 15,
           "unit": "percent"
         }
       ],
-      "name": "攻擊流血機率"
+      "name": "攻擊流血機率",
+      "choice": {
+        "title": "攻擊流血機率",
+        "prompt": "",
+        "options": [
+          {
+            "label": "",
+            "modifiers": [
+              {
+                "stat": "",
+                "value": 0,
+                "unit": "flat"
+              }
+            ]
+          },
+          {
+            "label": "",
+            "modifiers": [
+              {
+                "stat": "",
+                "value": 0,
+                "unit": "flat"
+              }
+            ]
+          }
+        ]
+      }
     },
     {
       "id": "n778",
@@ -14069,7 +14095,7 @@
       "confidence": "verified",
       "modifiers": [
         {
-          "stat": "攻擊力",
+          "stat": "攻擊流血機率",
           "value": 15,
           "unit": "percent"
         }
@@ -22128,7 +22154,7 @@
       ]
     }
   ],
-  "updatedAt": "2026-10-03T13:11:56.654Z",
+  "updatedAt": "2026-10-03T15:13:59.766Z",
   "progression": {
     "maxLevel": 70,
     "perLevel": 1,

@@ -11239,7 +11239,7 @@
       "modifiers": [
         {
           "stat": "鬥氣集中獲得鬥氣機率",
-          "value": 10,
+          "value": 5,
           "unit": "percent"
         }
       ],
@@ -11255,7 +11255,7 @@
       "modifiers": [
         {
           "stat": "鬥氣集中獲得鬥氣機率",
-          "value": 10,
+          "value": 5,
           "unit": "percent"
         }
       ],
@@ -14217,7 +14217,7 @@
         },
         {
           "stat": "使用單手劍或雙手劍時鬥氣集中獲得鬥氣機率",
-          "value": 60,
+          "value": 30,
           "unit": "percent"
         }
       ],
@@ -14334,7 +14334,7 @@
         },
         {
           "stat": "使用單手斧或雙手斧時鬥氣獲得鬥氣機率",
-          "value": 60,
+          "value": 75,
           "unit": "percent"
         }
       ],
@@ -22128,7 +22128,7 @@
       ]
     }
   ],
-  "updatedAt": "2026-10-03T03:18:07.317Z",
+  "updatedAt": "2026-10-03T13:11:56.654Z",
   "progression": {
     "maxLevel": 70,
     "perLevel": 1,

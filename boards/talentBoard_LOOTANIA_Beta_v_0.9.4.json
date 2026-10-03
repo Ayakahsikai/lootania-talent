@@ -10656,12 +10656,12 @@
       "confidence": "verified",
       "modifiers": [
         {
-          "stat": "擊中恢復HP",
-          "value": 4,
+          "stat": "擊中恢復MP",
+          "value": 2,
           "unit": "flat"
         }
       ],
-      "name": "擊中恢復生命"
+      "name": "擊中恢復魔力"
     },
     {
       "id": "n665",
@@ -22128,7 +22128,7 @@
       ]
     }
   ],
-  "updatedAt": "2026-10-03T02:58:15.990Z",
+  "updatedAt": "2026-10-03T03:18:07.317Z",
   "progression": {
     "maxLevel": 70,
     "perLevel": 1,

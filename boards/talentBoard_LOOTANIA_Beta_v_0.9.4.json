@@ -7763,9 +7763,15 @@
       "confidence": "placeholder",
       "modifiers": [
         {
-          "stat": "獲得等同於當前MP百分比的法術傷害%",
-          "value": 0,
-          "unit": "text"
+          "stat": "每有{v}點未保留魔力，魔法攻擊力{v}",
+          "value": 100,
+          "unit": "num",
+          "extra": [
+            {
+              "value": 1,
+              "unit": "flat"
+            }
+          ]
         }
       ],
       "name": "魔力充沛"
@@ -22122,7 +22128,7 @@
       ]
     }
   ],
-  "updatedAt": "2026-10-03T01:57:27.250Z",
+  "updatedAt": "2026-10-03T02:58:15.990Z",
   "progression": {
     "maxLevel": 70,
     "perLevel": 1,

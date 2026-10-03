@@ -12386,33 +12386,7 @@
           "unit": "percent"
         }
       ],
-      "name": "攻擊流血機率",
-      "choice": {
-        "title": "攻擊流血機率",
-        "prompt": "",
-        "options": [
-          {
-            "label": "",
-            "modifiers": [
-              {
-                "stat": "",
-                "value": 0,
-                "unit": "flat"
-              }
-            ]
-          },
-          {
-            "label": "",
-            "modifiers": [
-              {
-                "stat": "",
-                "value": 0,
-                "unit": "flat"
-              }
-            ]
-          }
-        ]
-      }
+      "name": "攻擊流血機率"
     },
     {
       "id": "n778",
@@ -22154,7 +22128,7 @@
       ]
     }
   ],
-  "updatedAt": "2026-10-03T15:13:59.766Z",
+  "updatedAt": "2026-10-03T15:15:28.267Z",
   "progression": {
     "maxLevel": 70,
     "perLevel": 1,

@@ -805,9 +805,34 @@ $('nextEmpty').onclick=()=>{
 $('autoPick').onchange=()=>scheduleSave();
 $('ruleConn').onchange=()=>{preview=null;if($('ruleConn').checked&&!board.startIds.length)toast('尚未設定起點，只能從已投節點往外延伸');render();};
 $('clearAll').onclick=()=>{alloc.clear();picks.clear();pickQueue=[];pendingBatch=null;$('picker').hidden=true;render();};
-$('confirmYes').onclick=()=>{ if(pendingAction){const f=pendingAction;pendingAction=null;$('confirm').hidden=true;f();return;} pendingRemoval?.forEach(x=>{alloc.delete(x);picks.delete(x);});pendingRemoval=null;$('confirm').hidden=true;render();};
-$('confirmNo').onclick=()=>{ if(alertMode){ alertMode=false; $('confirmYes').hidden=false; $('confirmNo').textContent='取消'; }
- pendingRemoval=null;if(pendingAction){pendingAction=null;render();}$('confirm').hidden=true;};
+$('confirmYes').onclick=()=>{ pendingNo=null; if(pendingAction){const f=pendingAction;pendingAction=null;$('confirm').hidden=true;resetConfirm();f();return;} pendingRemoval?.forEach(x=>{alloc.delete(x);picks.delete(x);});pendingRemoval=null;$('confirm').hidden=true;render();};
+function resetConfirm(){ $('confirmYes').hidden=false; $('confirmYes').textContent='一併移除'; $('confirmNo').textContent='取消'; }
+$('confirmNo').onclick=()=>{ if(alertMode){ alertMode=false; }
+ const nf=pendingNo; pendingNo=null; resetConfirm();
+ pendingRemoval=null;if(pendingAction){pendingAction=null;render();}$('confirm').hidden=true; if(nf) nf(); };
+let pendingNo=null;
+function askConfirm(title,html,yesText,noText,onYes,onNo){
+  pendingRemoval=null; alertMode=false; pendingAction=onYes; pendingNo=onNo||null;
+  $('confirmTitle').textContent=title; $('confirmMsg').innerHTML=html;
+  $('confirmYes').hidden=false; $('confirmYes').textContent=yesText; $('confirmNo').textContent=noText;
+  $('picker').hidden=true; $('confirm').hidden=false; $('confirmYes').focus();
+}
+/* offer the newest board version; remembers "keep" per (current, latest) pair so it does not nag every reload */
+const LS_VSKIP='tli-ver-skip-v1';
+function offerLatest(reason){
+  if(!MANIFEST||isLatest(board.version)) return false;
+  const latest=latestVer(), cur=board.version||'', key=cur+'→'+latest;
+  if(reason==='boot'){ try{ if(localStorage.getItem(LS_VSKIP)===key) return false; }catch(e){} }
+  const n=spent();
+  const why=reason==='build'?`這份流派是在 <b>${esc(cur)}</b> 建立，目前已切換到該版本顯示。`:`目前顯示的是上次使用的 <b>${esc(cur)}</b>。`;
+  askConfirm('有新的天賦版本',`${why}<br><br>最新版本是 <b>${esc(latest)}</b>${MANIFEST.boards.find(b=>b.version===latest)?.note?`（${esc(MANIFEST.boards.find(b=>b.version===latest).note)}）`:''}，要切換嗎？${n?`<br><br>切換後會保留新版仍存在、且仍與起點相連的天賦（目前 ${n} 點）。`:''}`,
+    '切換到最新版','保持目前版本',
+    async()=>{ try{ const had=spent(); const lost=await switchVersion(latest,true); scheduleSave(); try{localStorage.removeItem(LS_VSKIP);}catch(e){}
+      if(lost) showAlert('已切換到最新版',`已切換到 <b>${esc(latest)}</b>，保留 ${spent()} / ${had} 點。<br>有 <span class="cnt">${lost}</span> 點在新版中已不存在或無法連到起點，已移除。`); else toast(`已切換到 ${latest}${had?`，保留全部 ${had} 點`:''}`);
+    }catch(e){ showAlert('切換失敗',esc(e.message)); } },
+    ()=>{ try{ localStorage.setItem(LS_VSKIP,key); }catch(e){} toast(`保持 ${cur}，可隨時從右側「天賦版本」切換`); });
+  return true;
+}
 let pendingAction=null;
 function setStart(id){
   for(const s of board.startIds) alloc.delete(s);
@@ -1138,7 +1163,7 @@ async function openBuild(s){
     else { applyBuild(s); showAlert('找不到對應版本',`這份流派是在 <b>${esc(v)}</b> 建立，網站上已沒有這個版本，已改用目前的 <b>${esc(board.version||'')}</b> 讀取，部分天賦可能無法對應。`); return; }
   }
   applyBuild(s,true);
-  if(MANIFEST&&v&&!isLatest(v)) showAlert('這是舊版本的流派',`這份流派是在 <b>${esc(v)}</b> 建立，已自動切換到該版本顯示。<br><br>目前最新版本是 <b>${esc(latestVer())}</b>。要改用新版，請從右側「天賦版本」切換，仍存在的天賦會盡量保留。`);
+  if(MANIFEST&&v&&!isLatest(v)) offerLatest('build');
   else toast(`已讀取流派：${v||board.version||''}，${spent()} 點`);
 }
 function applyBuild(s,quiet){
@@ -1268,7 +1293,7 @@ async function boot(){
   setTool('select'); setMode('play');
   if(s&&s.boardVersion===board.version){ try{ applyBuild(s,true); }catch(e){} }
   if(await loadShareFromHash()) { render(); updFileState(); return; }
-  if(!isLatest(board.version)) toast(`目前顯示上次使用的 ${board.version}，最新版本為 ${latestVer()}`);
+  offerLatest('boot');
   render(); updFileState();
 }
 boot();

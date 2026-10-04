@@ -14204,8 +14204,8 @@
     },
     {
       "id": "n883",
-      "x": -134.5,
-      "y": -273.8,
+      "x": -135.2,
+      "y": -274.2,
       "kind": "medium",
       "size": 4.5,
       "confidence": "placeholder",
@@ -14333,7 +14333,7 @@
           "unit": "percent"
         },
         {
-          "stat": "使用單手斧或雙手斧時鬥氣獲得鬥氣機率",
+          "stat": "使用單手斧或雙手斧時鬥氣集中獲得鬥氣機率",
           "value": 75,
           "unit": "percent"
         }
@@ -17065,14 +17065,9 @@
       "confidence": "placeholder",
       "modifiers": [
         {
-          "stat": "使用弓弩技能時技能額外投射物數量",
+          "stat": "使用弓弩時額外投射物數量",
           "value": 1,
           "unit": "flat"
-        },
-        {
-          "stat": "(額外投射物會緊跟在主技能後面射出，若主技能擊殺當前目標，額外投射物會射向範圍內的下一個目標‧)",
-          "value": 0,
-          "unit": "text"
         }
       ],
       "name": "破空行者"
@@ -22120,7 +22115,7 @@
       ]
     }
   ],
-  "updatedAt": "2026-10-03T20:06:34.552Z",
+  "updatedAt": "2026-10-04T03:12:59.652Z",
   "progression": {
     "maxLevel": 70,
     "perLevel": 1,

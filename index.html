@@ -25,8 +25,8 @@ body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--f-ui);margin:0}
 .app{display:grid;grid-template-columns:minmax(0,1fr) 300px;height:100%}
 @media (max-width:760px){.app{grid-template-columns:1fr;grid-template-rows:62vh auto;height:auto}}
 .stage{position:relative;overflow:hidden;background:radial-gradient(circle at 50% 48%,#1a1a1f 0,var(--bg) 70%);touch-action:none;min-height:360px}
-svg{width:100%;height:100%;display:block;cursor:grab;user-select:none}
-svg.panning{cursor:grabbing}
+#svg{width:100%;height:100%;display:block;cursor:grab;user-select:none}
+#svg.panning{cursor:grabbing}
 .hud{position:absolute;left:16px;top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;pointer-events:none}
 .hud>*{pointer-events:auto}
 .chip{font:500 12px var(--f-mono);background:rgba(23,23,27,.85);border:1px solid var(--line);padding:4px 10px;border-radius:999px;color:var(--muted)}
@@ -171,6 +171,21 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .n.empty{stroke:#ff5d5d;stroke-width:1.4;stroke-dasharray:1.6 1}
 .n.filled{opacity:.55}
 .n.picked{stroke:#fff3d0;stroke-width:1.4}
+.icbg{fill:#0b0b0d;pointer-events:none}
+.ic{pointer-events:none;overflow:hidden;filter:brightness(.62) saturate(.55)}
+.ic.on{filter:brightness(1.4) saturate(1.2)}
+.ic.dim{opacity:.15}
+.n.hasicon{fill:#000;fill-opacity:0;pointer-events:all;stroke:none}
+.n.hasicon.on{stroke:none}
+.n.hasicon.picked{stroke-width:.5}
+.n.hasicon.reach{stroke:var(--accent);stroke-width:.4;stroke-opacity:.8}
+.n.hasicon.preview{stroke:var(--accent);stroke-width:.6;stroke-dasharray:1.2 .8}
+.n.hasicon.start{stroke:var(--start);stroke-width:.7}
+.n.hasicon.hit{stroke:#4fd6e8;stroke-width:1}
+.n.hasicon.sel,.n.hasicon:hover{stroke:#fff;stroke-width:.6}
+.n.hasicon.empty{stroke:#ff5d5d;stroke-width:1.2;stroke-dasharray:1.6 1}
+.n.dot{fill:#8f8f96}
+.n.dot.on{fill:#fff4d6}
 .n.needpick{stroke:var(--warn);stroke-width:1.6;stroke-dasharray:1.5 1}
 .tip .opt-on{color:var(--accent)}
 @media (prefers-reduced-motion:reduce){.toast{transition:none}}
@@ -183,7 +198,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
   <div class="stage" id="stage">
     <svg id="svg" viewBox="-340 -320 680 640" aria-label="天賦盤">
       <image id="bg" class="bgimg" href="data:image/png;base64," x="-333" y="-311" width="667" height="640" opacity="0"></image>
-      <g id="gE"></g><g id="gN"></g><g id="gL"></g>
+      <defs id="gDefs"></defs><g id="gE"></g><g id="gI"></g><g id="gN"></g><g id="gL"></g>
     </svg>
     <div class="hud">
       <span class="chip" id="lvChip" title="投入目前點數所需的等級（假設任務天賦點都已取得）">需求等級 <b id="lvNeed">Lv 1</b></span>
@@ -396,7 +411,22 @@ function pathD(e){
   const a=byId.get(e.from), b=byId.get(e.to);
   return e.ctrl ? `M${a.x} ${a.y}Q${e.ctrl[0]} ${e.ctrl[1]} ${b.x} ${b.y}` : `M${a.x} ${a.y}L${b.x} ${b.y}`;
 }
-function radius(n){return n.kind==='start'?5.5:n.kind==='notable'?4.5:n.kind==='medium'?3.4:n.kind==='hub'?2.2:n.kind==='junction'?1.6:2.5;}
+function radius(n){ if(n.iconSize) return Math.max(1.2,n.iconSize/2); return n.kind==='start'?5.5:n.kind==='notable'?4.5:n.kind==='medium'?3.4:n.kind==='hub'?2.2:n.kind==='junction'?1.6:2.5;}
+/* ---------- node icons (sprite sheet stored in board.iconSheet) ---------- */
+const icState=new Map(); let icBoard=null, icSheet=null, icEls=new Map();
+function hasIcon(n){ return !!(board.iconSheet&&n.icon!=null&&n.icon>=0); }
+function renderIcons(){
+  const sh=board.iconSheet;
+  if(!sh){ if(icBoard){ $('gI').innerHTML=''; $('gDefs').innerHTML=''; icBoard=null; icEls.clear(); } return; }
+  if(icSheet!==sh.src){ $('gDefs').innerHTML=`<image id="isheet" href="${sh.src}" width="${sh.w}" height="${sh.h}"/>`; icSheet=sh.src; icBoard=null; }
+  if(icBoard!==board||mode==='edit'){
+    let h=''; const cell=sh.cell, cols=sh.cols;
+    for(const n of board.nodes){ if(!hasIcon(n)) continue; const r=radius(n), cx=(n.icon%cols)*cell, cy=Math.floor(n.icon/cols)*cell;
+      h+=`<circle class="icbg" cx="${n.x}" cy="${n.y}" r="${r}"/><svg class="ic" data-i="${n.id}" preserveAspectRatio="xMidYMid slice" x="${n.x-r}" y="${n.y-r}" width="${2*r}" height="${2*r}" viewBox="${cx} ${cy} ${cell} ${cell}"><use href="#isheet"/></svg>`; }
+    $('gI').innerHTML=h; icEls=new Map([...$('gI').children].filter(e=>e.dataset.i).map(e=>[e.dataset.i,e])); icBoard=board;
+  }
+  for(const [id,e] of icEls){ const s='ic'+(icState.get(id)||''); if(e.getAttribute('class')!==s) e.setAttribute('class',s); }
+}
 function render(){
   const pe = preview? new Set(preview.edges):null, pn = preview? new Set(preview.nodes):null;
   const reach = reachable(); const sq=searchQ; svg.classList.toggle('searching',!!sq);
@@ -416,11 +446,13 @@ function render(){
     if(board.startIds.includes(n.id))c+=' start';
     if(n.id===sel||n.id===linkFrom)c+=' sel';
     if(sq){ if(searchSet.has(n.id)) c+=' hit'+(n.id===searchCur?' cur':''); else c+=' dim'; }
-    const pc=pickColor(n);
-    nh+=`<circle class="${c}${pc?' picked':''}" data-n="${n.id}" cx="${n.x}" cy="${n.y}" r="${radius(n)}"${pc?` style="fill:${pc}"`:''}/>`;
+    const pc=pickColor(n), hi=hasIcon(n);
+    if(hi) c+=' hasicon'; else if(n.iconSize&&n.iconSize<3) c+=' dot';
+    nh+=`<circle class="${c}${pc?' picked':''}" data-n="${n.id}" cx="${n.x}" cy="${n.y}" r="${radius(n)}"${pc?` style="${hi?'stroke':'fill'}:${pc}"`:''}/>`;
+    icState.set(n.id,(alloc.has(n.id)?' on':'')+(c.includes(' dim')?' dim':''));
   }
   const lh='';
-  $('gE').innerHTML=eh; $('gN').innerHTML=nh; $('gL').innerHTML=lh;
+  $('gE').innerHTML=eh; $('gN').innerHTML=nh; $('gL').innerHTML=lh; renderIcons();
   $('cnt').textContent=spent();
   $('startChip').hidden=!($('ruleConn').checked&&!hasStart()&&mode==='play');
   { const s=$('startSel'); const cur=board.startIds.find(x=>alloc.has(x))||'';

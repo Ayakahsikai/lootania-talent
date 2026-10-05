@@ -29,6 +29,8 @@ body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--f-ui);margin:0}
 #svg.panning{cursor:grabbing}
 .hud{position:absolute;left:16px;top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;pointer-events:none}
 .hud>*{pointer-events:auto}
+.hudcol{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;pointer-events:none}.hudcol>*{pointer-events:auto}
+.hud{align-items:flex-start}
 .chip{font:500 12px var(--f-mono);background:rgba(23,23,27,.85);border:1px solid var(--line);padding:4px 10px;border-radius:999px;color:var(--muted)}
 .startsel{font:500 12px var(--f-ui);background:rgba(23,23,27,.92);border:1px solid var(--start);color:var(--fg);border-radius:999px;padding:4px 10px}
 .search{display:flex;align-items:center;gap:4px;background:rgba(23,23,27,.92);border:1px solid var(--line);border-radius:999px;padding:2px 4px 2px 10px}
@@ -65,6 +67,22 @@ input[type=range]{flex:1;accent-color:var(--accent)}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font:12px var(--f-mono)}
 .kv dt{color:var(--muted)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
 .note{font-size:12px;color:var(--muted);margin:0}
+.hud-stage{position:absolute;left:0;top:calc(100% + 6px);width:280px;max-width:calc(100vw - 32px);background:rgba(23,23,27,.92);border:1px solid var(--line);border-radius:10px;padding:6px 8px 8px;box-sizing:border-box}
+.st-head{display:flex;align-items:center;gap:6px;width:100%;border:0;background:transparent;padding:2px 0 6px;font:500 11px var(--f-ui);letter-spacing:.12em;color:var(--muted)}
+.st-head i{margin-left:auto;font-style:normal;transition:transform .15s}
+.hud-stage.closed .st-head{padding-bottom:0}.hud-stage.closed .st-head i{transform:rotate(-90deg)}.hud-stage.closed .st-body{display:none}
+.hud-stage .st-list{max-height:min(40vh,320px);overflow:auto}
+.st-add{display:flex;gap:6px}.st-add input{flex:1}.st-add button{white-space:nowrap}
+.st-list{display:flex;flex-direction:column;gap:4px;margin-top:8px}.st-list:empty{display:none}
+.st-it{display:flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:6px;padding:2px 2px 2px 0;background:#121216}
+.st-it.cur{border-color:var(--accent);background:rgba(224,184,98,.08)}
+.st-go{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:1px;border:0;background:transparent;text-align:left;padding:4px 8px}
+.st-go b{font-weight:500;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st-it.cur .st-go b{color:var(--accent)}
+.st-go small{color:var(--muted);font:11px var(--f-mono);white-space:nowrap}
+.st-it>button:not(.st-go){border:0;background:transparent;color:var(--muted);padding:4px 6px;font-size:12px}
+.st-it>button:not(.st-go):hover{color:var(--fg);background:#212127}
+.st-it input{flex:1;margin:2px 4px}
 .confirm{min-width:260px;max-width:min(380px,calc(100% - 32px))}
 .cf-msg{font-size:13px;text-align:left;color:#dcdcf0}
 .cf-msg ul{margin:8px 0 0;padding:0;list-style:none;max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:6px}
@@ -201,9 +219,18 @@ button:disabled{opacity:.45;cursor:not-allowed}
       <defs id="gDefs"></defs><g id="gE"></g><g id="gI"></g><g id="gN"></g><g id="gL"></g>
     </svg>
     <div class="hud">
-      <span class="chip" id="lvChip" title="投入目前點數所需的等級（假設任務天賦點都已取得）">需求等級 <b id="lvNeed">Lv 1</b></span>
+      <div class="hudcol">
+        <span class="chip" id="lvChip" title="投入目前點數所需的等級（假設任務天賦點都已取得）">需求等級 <b id="lvNeed">Lv 1</b></span>
+        <span class="chip ed-only" id="modeChip">投點模式</span>
+        <div class="hud-stage pl-only" id="stageSec">
+          <button class="st-head" id="stToggle" aria-expanded="true" title="點一下階段即可切換到該階段的配點；階段會跟著流派檔案、分享碼一起保存">階段配點 <span id="stCnt" class="nb-cnt"></span><i>▾</i></button>
+          <div class="st-body">
+            <div class="st-add"><input type="text" id="stName" maxlength="40" placeholder="階段名稱（留空＝以等級命名）" aria-label="階段名稱"><button id="stSave" class="primary">存成階段</button></div>
+            <div id="stList" class="st-list"></div>
+          </div>
+        </div>
+      </div>
       <span class="chip" id="ptChip">已投 <b id="cnt">0</b> / <span id="capPts">77</span> 點</span>
-      <span class="chip" id="modeChip">投點模式</span>
       <select id="startSel" class="startsel" aria-label="選擇起點"></select>
       <span class="search" id="searchBox"><input id="search" type="search" placeholder="搜尋天賦（空格＝且，｜＝或，-詞＝排除）" title="例：暴擊 -短杖　　拳套 投射物　　敏捷｜智力" aria-label="搜尋天賦" autocomplete="off"><span id="searchCnt"></span><button id="sPrev" aria-label="上一個">‹</button><button id="sNext" aria-label="下一個">›</button></span>
       <span class="chip" id="startChip" style="color:var(--start);border-color:var(--start)">← 請先選擇起點</span>
@@ -459,7 +486,7 @@ function render(){
     const html=`<option value="">選擇起點…</option>`+board.startIds.map(id=>`<option value="${id}">${esc(dispName(byId.get(id))||id)}</option>`).join('');
     if(s.dataset.h!==html){s.innerHTML=html;s.dataset.h=html;} s.value=cur; s.hidden=mode!=='play'; }
   $('stats').textContent=`${board.nodes.length} 節點 · ${board.edges.length} 連線 · ${board.startIds.length} 個起點`;
-  renderInfo(); renderTotals(); renderNotables(); scheduleSave();
+  renderInfo(); renderTotals(); renderNotables(); renderStages(); scheduleSave();
   { const n=spent(), cap=capPts(), L=needLevel(n); $('capPts').textContent=cap; $('lvNeed').textContent=L?`Lv ${L}`:`超過 Lv ${prog().maxLevel}`;
     $('ptChip').classList.toggle('over',n>cap); $('lvChip').classList.toggle('over',!L); $('progSec').hidden=mode!=='edit'; }
   { const need=board.nodes.filter(n=>!isJunction(n)); const e=need.filter(n=>!hasContent(n)).length; $('emptyCnt').textContent=`未設定 ${e} / ${need.length}`; $('nextEmpty').disabled=!e; }
@@ -1145,7 +1172,7 @@ $('resetBoard').onclick=()=>{
 };
 
 /* ---------- player build save/load ---------- */
-function buildData(){return {type:'tli-build',boardVersion:board.version||'',boardFile:CUR_FILE||undefined,start:board.startIds.find(x=>alloc.has(x))||null,alloc:[...alloc],picks:[...picks],lastPick,autoPick3:$('autoPick').checked,savedAt:new Date().toISOString()};}
+function buildData(){return {type:'tli-build',boardVersion:board.version||'',boardFile:CUR_FILE||undefined,start:board.startIds.find(x=>alloc.has(x))||null,alloc:[...alloc],picks:[...picks],lastPick,autoPick3:$('autoPick').checked,stages:stages.map(x=>({name:x.name,alloc:x.alloc,picks:x.picks})),savedAt:new Date().toISOString()};}
 /* ---------- board versions (folder + manifest; used by the website build) ---------- */
 let MANIFEST=null, CUR_FILE=null;
 function verEntry(v){return MANIFEST&&MANIFEST.boards.find(b=>b.version===v);}
@@ -1203,6 +1230,7 @@ function applyBuild(s,quiet){
   const miss=s.alloc.filter(id=>!byId.has(id));
   { const st=s.alloc.find(id=>isStart(id)&&byId.has(id)); alloc=new Set(s.alloc.filter(id=>byId.has(id)&&(!isStart(id)||id===st))); } picks=new Map((s.picks||[]).filter(([id])=>alloc.has(id)));
   lastPick=s.lastPick||{}; $('autoPick').checked=s.autoPick3===true; pickQueue=[]; pendingBatch=null; $('picker').hidden=true;
+  stages=cleanStages(s.stages); stEditing=null;
   render();
   const warn=(s.boardVersion&&s.boardVersion!==(board.version||''))?`（此配點是在 ${s.boardVersion} 建立，目前是 ${board.version||'未標版本'}）`:'';
   if(spent()>capPts()) showAlert('天賦點超過上限',`這份配點共 <span class="cnt">${spent()}</span> 點，超過目前上限 <span class="cnt">${capPts()}</span> 點，請取消部分天賦。`);
@@ -1219,6 +1247,88 @@ async function saveBuild(){
   if(await saveText(`build_${ds}_${spent()}pt.json`,JSON.stringify(buildData(),null,2))) toast(`已儲存流派（${board.version||'未標版本'}）`);
 }
 $('bSave').onclick=saveBuild;
+/* ---------- build stages: named snapshots of the allocation (e.g. Lv 30 / Lv 50 / 完成) ---------- */
+let stages=[], stEditing=null;
+const stPts=t=>t.alloc.filter(x=>byId.has(x)&&!isStart(x)).length;
+function cleanStages(list){
+  if(!Array.isArray(list)) return [];
+  const out=[], names=new Set();
+  for(const t of list){ if(!t||!Array.isArray(t.alloc)) continue;
+    let name=String(t.name||'').trim().slice(0,40)||'未命名'; const base=name; let k=2; while(names.has(name)) name=`${base} (${k++})`; names.add(name);
+    out.push({name,alloc:t.alloc.map(String),picks:(Array.isArray(t.picks)?t.picks:[]).filter(x=>Array.isArray(x)&&x.length===2).map(([id,v])=>[String(id),+v||0])}); }
+  return out;
+}
+function sigOf(a,p){ const A=[...a].filter(x=>byId.has(x)).sort(); const S=new Set(A); return A.join(',')+'|'+[...p].filter(([id])=>S.has(id)).map(([id,k])=>id+':'+k).sort().join(','); }
+const curSig=()=>sigOf(alloc,picks), stSig=t=>sigOf(t.alloc,t.picks);
+function stDefaultName(){ const n=spent(), L=needLevel(n); return L?`Lv ${L}`:`${n} 點`; }
+function stSnapshot(name){ return {name,alloc:[...alloc],picks:[...picks].filter(([id])=>alloc.has(id))}; }
+function sortStages(){ stages.sort((x,y)=>stPts(x)-stPts(y)); }
+function renderStages(force){
+  const box=$('stList'); if(!box) return;
+  $('stCnt').textContent=stages.length?`${stages.length}`:'';
+  const cur=curSig(); if(force||stEditing===null||!box.querySelector('.st-rn')||!box.contains(document.activeElement)){
+    let prevPts=null;
+    box.innerHTML=stages.map((t,i)=>{ const n=stPts(t), L=needLevel(n), on=stSig(t)===cur;
+      const d=prevPts===null?'':` · +${n-prevPts}`; prevPts=n;
+      if(stEditing===i) return `<div class="st-it${on?' cur':''}" data-i="${i}"><input type="text" class="st-rn" maxlength="40" value="${esc(t.name)}" aria-label="階段名稱"><button data-a="ok" title="確定">✓</button></div>`;
+      return `<div class="st-it${on?' cur':''}" data-i="${i}"><button class="st-go" data-a="go" title="切換到此階段"><b>${esc(t.name)}</b><small>${L?'Lv '+L:'超過上限'} · ${n} 點${d}</small></button>`+
+        `<button data-a="upd" title="用目前配點覆蓋這個階段">更新</button><button data-a="ren" title="改名">改名</button><button data-a="del" title="刪除">✕</button></div>`; }).join('');
+    const rn=box.querySelector('.st-rn'); if(rn&&document.activeElement!==rn){ rn.focus(); rn.select(); }
+  }
+  $('stName').placeholder=`階段名稱（留空＝${hasStart()?stDefaultName():'以等級命名'}）`;
+}
+function saveStage(){
+  if(!hasStart()||!spent()){ toast('請先選擇起點並投點'); return; }
+  if(spent()>capPts()){ toast(`目前 ${spent()} 點超過上限 ${capPts()} 點，請先調整`); return; }
+  const typed=$('stName').value.trim().slice(0,40), name=typed||stDefaultName(), sig=curSig();
+  const same=stages.find(t=>stSig(t)===sig&&t.name!==name);
+  if(same){ toast(`這份配點和「${same.name}」相同，未重複儲存`); return; }
+  const ex=stages.findIndex(t=>t.name===name);
+  const done=msg=>{ $('stName').value=''; sortStages(); render(); toast(msg); };
+  if(ex<0){ stages.push(stSnapshot(name)); done(`已存成階段「${name}」（${spent()} 點）`); return; }
+  if(stSig(stages[ex])===sig){ toast(`階段「${name}」已是目前配點`); return; }
+  askConfirm('階段名稱已存在',`已有名為 <b>${esc(name)}</b> 的階段（${stPts(stages[ex])} 點），要用目前配點（${spent()} 點）覆蓋嗎？${typed?'':'<br><br>想另外保留，請在名稱欄輸入其他名稱。'}`,'覆蓋','取消',
+    ()=>{ stages[ex]=stSnapshot(name); done(`已覆蓋階段「${name}」（${spent()} 點）`); });
+}
+function gotoStage(i){
+  const t=stages[i]; if(!t) return;
+  const cur=curSig(); if(stSig(t)===cur) return;
+  const go=()=>{ const want=t.alloc.filter(x=>!isStart(x)&&byId.has(x)).length;
+    pickQueue=[]; pendingBatch=null; $('picker').hidden=true; sel=null;
+    carryBuild(t.alloc,t.picks); render();
+    const lost=want-spent(); toast(`已切換到「${t.name}」：${spent()} 點${lost>0?`（${lost} 點在目前版本無法對應，已略過）`:''}`); };
+  if(spent()&&!stages.some(x=>stSig(x)===cur))
+    askConfirm('目前配點尚未存成階段',`切換到 <b>${esc(t.name)}</b> 會取代目前的配點（${spent()} 點），而目前配點沒有存成任何階段。<br><br>要保留的話，請先按「存成階段」。`,'仍要切換','取消',go);
+  else go();
+}
+$('stSave').onclick=saveStage;
+{ const LS_ST='tli-stage-open-v1', box=$('stageSec'), set=o=>{ box.classList.toggle('closed',!o); $('stToggle').setAttribute('aria-expanded',o); };
+  try{ set(localStorage.getItem(LS_ST)!=='0'); }catch(e){}
+  $('stToggle').onclick=()=>{ const o=box.classList.contains('closed'); set(o); try{ localStorage.setItem(LS_ST,o?'1':'0'); }catch(e){} }; }
+$('stName').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); saveStage(); } });
+function commitRename(inp){
+  const i=+inp.closest('.st-it').dataset.i, t=stages[i]; stEditing=null; if(!t){ render(); return; }
+  const v=inp.value.trim().slice(0,40);
+  if(v&&v!==t.name){ if(stages.some((x,j)=>j!==i&&x.name===v)){ toast(`已有名為「${v}」的階段`); render(); return; } t.name=v; toast(`已改名為「${v}」`); }
+  render();
+}
+$('stList').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-a]'); if(!b) return; const i=+b.closest('.st-it').dataset.i, t=stages[i]; if(!t) return;
+  const a=b.dataset.a;
+  if(a==='go') gotoStage(i);
+  else if(a==='ren'){ stEditing=i; renderStages(true); }
+  else if(a==='ok'){ const inp=b.closest('.st-it').querySelector('.st-rn'); if(inp) commitRename(inp); }
+  else if(a==='upd'){
+    if(!hasStart()||!spent()){ toast('請先選擇起點並投點'); return; }
+    if(stSig(t)===curSig()){ toast(`「${t.name}」已是目前配點`); return; }
+    askConfirm('更新階段',`要用目前配點（${spent()} 點）覆蓋 <b>${esc(t.name)}</b>（${stPts(t)} 點）嗎？`,'覆蓋','取消',()=>{ stages[i]=stSnapshot(t.name); sortStages(); render(); toast(`已更新「${t.name}」`); });
+  }
+  else if(a==='del') askConfirm('刪除階段',`確定刪除 <b>${esc(t.name)}</b>（${stPts(t)} 點）？目前畫面上的配點不受影響。`,'刪除','取消',()=>{ stages.splice(i,1); render(); toast(`已刪除「${t.name}」`); });
+});
+$('stList').addEventListener('keydown',e=>{ const inp=e.target.closest('.st-rn'); if(!inp) return;
+  if(e.key==='Enter'){ e.preventDefault(); commitRename(inp); } else if(e.key==='Escape'){ e.preventDefault(); stEditing=null; render(); } });
+$('stList').addEventListener('focusout',e=>{ const inp=e.target.closest('.st-rn'); if(!inp) return; setTimeout(()=>{ if(stEditing!==null&&!$('stList').contains(document.activeElement)) commitRename(inp); },0); });
+
 /* ---------- share code: LT1 + base64url( version | start | sorted node ids (delta varint) | picks ) ---------- */
 const SH_PREFIX='LT1';
 function vPush(a,n){ n=Math.max(0,Math.floor(n)); while(n>=128){a.push((n&127)|128); n=Math.floor(n/128);} a.push(n); }
@@ -1235,6 +1345,11 @@ function encodeShare(){
   vPush(a,ids.length); let prev=0; for(const k of ids){ vPush(a,k-prev); prev=k; }
   const pk=[...picks].filter(([id])=>alloc.has(id)).map(([id,k])=>[idNum(id),k]).sort((x,y)=>x[0]-y[0]);
   vPush(a,pk.length); prev=0; for(const [id,k] of pk){ vPush(a,id-prev); prev=id; vPush(a,k); }
+  if(stages.length){ vPush(a,stages.length); for(const t of stages){   // optional stage block (older readers ignore it)
+    const nm=new TextEncoder().encode(t.name); vPush(a,nm.length); nm.forEach(x=>a.push(x));
+    const sst=t.alloc.find(x=>isStart(x)); vPush(a,sst?idNum(sst):0);
+    const si=t.alloc.filter(x=>!isStart(x)).map(idNum).sort((x,y)=>x-y); vPush(a,si.length); prev=0; for(const k of si){ vPush(a,k-prev); prev=k; }
+    const sp=t.picks.map(([id,k])=>[idNum(id),k]).sort((x,y)=>x[0]-y[0]); vPush(a,sp.length); prev=0; for(const [id,k] of sp){ vPush(a,id-prev); prev=id; vPush(a,k); } } }
   let sum=0; for(const x of a) sum=(sum*31+x)%251; a.push(sum);
   return SH_PREFIX+b64u(a);
 }
@@ -1247,7 +1362,12 @@ function decodeShare(code){
   const p={i:0}; const vl=vRead(b,p); const ver=new TextDecoder().decode(b.slice(p.i,p.i+vl)); p.i+=vl;
   const st='n'+vRead(b,p); const n=vRead(b,p); const allocL=[st]; let prev=0; for(let i=0;i<n;i++){ prev+=vRead(b,p); allocL.push('n'+prev); }
   const m=vRead(b,p); const pk=[]; prev=0; for(let i=0;i<m;i++){ prev+=vRead(b,p); pk.push(['n'+prev,vRead(b,p)]); }
-  return {type:'tli-build',boardVersion:ver,start:st,alloc:allocL,picks:pk,lastPick,autoPick3:$('autoPick').checked};
+  const stL=[]; if(p.i<b.length-1){ const ns=vRead(b,p); for(let j=0;j<ns;j++){
+    const nl=vRead(b,p); const name=new TextDecoder().decode(b.slice(p.i,p.i+nl)); p.i+=nl;
+    const ss=vRead(b,p); const al=ss?['n'+ss]:[]; const c=vRead(b,p); prev=0; for(let i=0;i<c;i++){ prev+=vRead(b,p); al.push('n'+prev); }
+    const q=vRead(b,p); const sp=[]; prev=0; for(let i=0;i<q;i++){ prev+=vRead(b,p); sp.push(['n'+prev,vRead(b,p)]); }
+    stL.push({name,alloc:al,picks:sp}); } }
+  return {type:'tli-build',boardVersion:ver,start:st,alloc:allocL,picks:pk,stages:stL,lastPick,autoPick3:$('autoPick').checked};
 }
 async function copyText(s,okMsg){
   try{ await navigator.clipboard.writeText(s); toast(okMsg); }

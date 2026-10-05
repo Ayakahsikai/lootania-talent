@@ -12873,7 +12873,9 @@
           "unit": "percent"
         }
       ],
-      "name": "範圍技能傷害"
+      "name": "範圍技能傷害",
+      "iconSize": 5.48,
+      "icon": 560
     },
     {
       "id": "n731",
@@ -13123,7 +13125,9 @@
           "unit": "percent"
         }
       ],
-      "name": "移動速度"
+      "name": "移動速度",
+      "iconSize": 5.06,
+      "icon": 90
     },
     {
       "id": "n746",
@@ -13157,7 +13161,9 @@
           "unit": "percent"
         }
       ],
-      "name": "移動速度"
+      "name": "移動速度",
+      "iconSize": 5.06,
+      "icon": 90
     },
     {
       "id": "n748",

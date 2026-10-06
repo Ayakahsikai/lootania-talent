@@ -1,0 +1,73 @@
+# 把 talent/ 與 wiki/ 組合成一個 GitHub Pages 網站：
+#   talent/  →  網站根目錄    https://<帳號>.github.io/<repo>/        （天賦網址維持不變）
+#   wiki/    →  /wiki/        https://<帳號>.github.io/<repo>/wiki/
+# 使用前：Settings → Pages → Build and deployment → Source 選「GitHub Actions」
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 檢查天賦資料
+        run: |
+          set -euo pipefail
+          test -f talent/index.html || { echo "::error::找不到 talent/index.html"; exit 1; }
+          test -f talent/boards/index.json || { echo "::error::找不到 talent/boards/index.json"; exit 1; }
+          if [ -e talent/wiki ]; then echo "::error::talent/ 裡不能有 wiki 資料夾，會和 /wiki/ 網址衝突"; exit 1; fi
+          python3 - <<'PY'
+          import json, sys
+          m = json.load(open('talent/boards/index.json', encoding='utf-8'))
+          errs = []
+          vers = [b.get('version') for b in m.get('boards', [])]
+          if not vers: errs.append('boards/index.json 沒有任何版本')
+          if m.get('latest') not in vers: errs.append(f"latest「{m.get('latest')}」不在 boards 清單裡")
+          for b in m.get('boards', []):
+              try:
+                  d = json.load(open('talent/boards/' + b['file'], encoding='utf-8'))
+              except Exception as e:
+                  errs.append(f"{b.get('file')}: 無法讀取（{e}）"); continue
+              if d.get('version') != b.get('version'):
+                  errs.append(f"{b['file']}: 檔內 version「{d.get('version')}」與清單「{b.get('version')}」不同")
+          for e in errs: print(f"::error::{e}")
+          sys.exit(1 if errs else 0)
+          PY
+
+      - name: 組合網站
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          cp -a talent/. _site/
+          if [ -d wiki ]; then mkdir -p _site/wiki && cp -a wiki/. _site/wiki/; fi
+          touch _site/.nojekyll
+          echo "網站內容："; find _site -maxdepth 2 | sort
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

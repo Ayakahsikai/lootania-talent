@@ -159,6 +159,31 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .totals dt.fx{color:#cfc6ff}
 .totals dt.fx::before{content:'◆ ';color:var(--muted);font-size:10px}
 .totals dt{min-width:0;overflow-wrap:anywhere}
+.totals dt.tgrp{grid-column:1/-1;display:flex;align-items:center;gap:6px;margin-top:10px;padding-bottom:3px;border-bottom:1px solid var(--line);font:500 11px var(--f-ui);letter-spacing:.1em;color:var(--muted);cursor:pointer;user-select:none}
+.totals dt.tgrp:first-child{margin-top:0}
+.totals dt.tgrp::before{content:'▾';font-size:10px;width:10px}.totals dt.tgrp.closed::before{content:'▸'}
+.totals dt.tgrp small{font:11px var(--f-mono);opacity:.7}
+.totals dt.tgrp.off{color:var(--warn)}
+.totals [data-off]{opacity:.45}.totals dd[data-off]{text-decoration:line-through}
+.cds{display:inline-flex;flex-wrap:wrap;gap:3px;margin-left:6px;vertical-align:1px}
+.cd{font:10px/15px var(--f-ui);color:#9fb7d9;border:1px solid #34445c;border-radius:4px;padding:0 4px;white-space:nowrap;letter-spacing:0}
+.cd.ok{color:#9fd99f;border-color:#3b5e3b}
+.tip .moff{opacity:.5;text-decoration:line-through}
+.cond-box{margin:0 0 10px;padding:8px;border:1px solid var(--line);border-radius:8px;background:#121216}
+.cond-tg{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--fg);cursor:pointer}
+.cond-sum{margin-left:auto;font:11px var(--f-mono);color:var(--muted);white-space:nowrap}
+.cond-chips{margin-top:8px;display:flex;flex-direction:column;gap:8px}
+.cond-g{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.cond-g>span{font-size:11px;color:var(--muted);width:100%}
+.cond-g button{font-size:12px;padding:2px 9px;border-radius:999px;color:var(--muted)}
+.cond-g button.on{background:rgba(143,209,143,.14);border-color:#5f9e5f;color:#c4ecc4}
+.cond-g button small{opacity:.65;margin-left:4px;font:10px var(--f-mono)}
+.cond-clr{font-size:11px;padding:2px 8px}
+.cls-list{display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:460px;overflow:auto;padding-right:2px}
+.cls-row{display:grid;grid-template-columns:96px minmax(0,1fr);gap:4px;border-top:1px solid var(--line);padding-top:6px}
+.cls-row.man{border-left:2px solid var(--accent);padding-left:6px}
+.cls-st{grid-column:1/-1;font-size:12px;overflow-wrap:anywhere}.cls-st small{color:var(--muted);font:11px var(--f-mono);margin-left:4px}
+.cls-row select{padding:4px 2px;font-size:12px}.cls-row input{font-size:12px}
 .warnline{font-size:12px;color:var(--warn);margin:6px 0 0}
 .picker{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:8;min-width:220px;max-width:min(320px,calc(100% - 32px));background:linear-gradient(#23264a,#191b36);border:1px solid #555a9c;border-radius:6px;box-shadow:0 8px 30px rgba(0,0,0,.6);padding:10px 14px 12px;text-align:center}
 .pk-title{font-weight:700;font-size:15px;margin-bottom:6px;border-bottom:1px solid #3b3f7a;padding-bottom:6px}
@@ -285,6 +310,10 @@ button:disabled{opacity:.45;cursor:not-allowed}
 
     <section id="totalsSec">
       <h2>加成總計</h2>
+      <div class="cond-box">
+        <label class="cond-tg"><input type="checkbox" id="condMode"> 依武器／技能／狀態判定是否生效<span id="condSum" class="cond-sum"></span></label>
+        <div id="condChips" class="cond-chips" hidden></div>
+      </div>
       <dl class="totals" id="totals"></dl>
       <p class="warnline" id="unpicked" hidden></p>
     </section>
@@ -332,6 +361,13 @@ button:disabled{opacity:.45;cursor:not-allowed}
       <div class="tpl-list" id="tplList"></div>
       <div class="row" style="margin-top:8px"><button id="tplAdd">＋ 新增範本</button></div>
       <div class="ed" id="tplEd" hidden style="margin-top:10px"></div>
+    </section>
+
+    <section id="clsSec" class="ed-only" hidden>
+      <h2>詞綴分類 <span class="nb-cnt" id="clsCnt"></span></h2>
+      <p class="note" style="margin-bottom:8px">依文字自動歸類並判斷生效條件；判斷錯的在這裡覆寫。條件寫法：<code>短劍/拳套 + 投射物</code>＝（短劍或拳套）且投射物；填 <code>-</code> 代表無條件；留空＝自動。</p>
+      <div class="row" style="flex-wrap:nowrap"><input type="text" id="clsQ" placeholder="篩選詞綴、分類或條件" aria-label="篩選詞綴"><label style="white-space:nowrap;font-size:12px"><input type="checkbox" id="clsMan"> 只看已覆寫</label></div>
+      <div id="clsList" class="cls-list"></div>
     </section>
 
     <section>
@@ -418,7 +454,10 @@ let picks = new Map(); // nodeId -> option index
 let pickQueue = [], clip = null, edFor = null, lastPick = {};
 const STATS=['力量','敏捷','智力','幸運','攻擊力','魔法攻擊力','全部元素抗性','最大HP','最大MP','防禦力','爆擊率','爆擊傷害','攻擊速度','施法速度','移動速度'];
 const OPT_COLORS=['#b23a3a','#2f8a57','#2f68b0','#b8902a','#7d45a8','#1f8f86'];
-const LS='tli-talent-board-v1', LS_B='tli-talent-build-v1';
+const LS='lootania-talent-board-v1', LS_B='lootania-talent-build-v1';
+/* one-time move of data saved under the old "tli-" keys (old copies are left in place, never overwritten) */
+try{ for(const k of ['talent-board-v1','talent-build-v1','ver-skip-v1','stage-open-v1']){ const nk='lootania-'+k, ok='tli-'+k;
+  if(localStorage.getItem(nk)==null){ const v=localStorage.getItem(ok); if(v!=null) localStorage.setItem(nk,v); } } }catch(e){}
 let mode = 'play', tool = 'select', sel = null, linkFrom = null, preview = null, pendingRemoval = null;
 const hist = [];
 
@@ -502,6 +541,62 @@ function fillStat(stat,slots){const s=stat||'（未命名）'; if(slots[0].unit=
   let j=0; return s.replace(/\{v\}/g,()=>{const x=slots[Math.min(j++,slots.length-1)];return fmtVal(x.value,x.unit);}); }
 function fmtStat(stat,v,unit){return fillStat(stat,[{value:v,unit}]);}
 function fmtMod(m){return typeof m==='string'?m:fillStat(m.stat,slotsOf(m));}
+/* ---------- stat classification: category + conditions (auto rules; board.statClass overrides) ---------- */
+const COND_GROUPS=[['weapon','武器'],['skill','技能類型'],['state','狀態']];
+const COND_DEFS=[
+  // weapons: all weapon words in one stat form a single OR-group ("使用A或B時")
+  ['短劍','weapon',/短劍/],['拳套','weapon',/拳套/],['弓弩','weapon',/弓弩/],['短杖','weapon',/短杖/],['長杖','weapon',/長杖/],
+  ['單手劍','weapon',/單手劍/],['雙手劍','weapon',/雙手劍|單手劍\/單手斧或雙手劍/],['單手斧','weapon',/單手斧/],['雙手斧','weapon',/雙手斧/],
+  ['單手棍','weapon',/單手棍/],['雙手棍','weapon',/雙手棍/],['槍矛','weapon',/槍矛/],
+  ['盾牌','weapon',/(?<!不)使用盾牌|持盾/],['不持盾','weapon',/不使用盾牌/],['雙持','weapon',/雙持/],
+  ['單手武器','weapon',/單手(武器|攻擊)/],['雙手武器','weapon',/雙手(武器|攻擊)/],['箭矢/飛鏢','weapon',/箭矢(或|和)飛鏢/],
+  // skill types: each one is its own AND requirement
+  ['攻擊','skill',/^(攻擊(?!力|速度|與)|.*攻擊技能|.*攻擊造成|.*攻擊傷害)/],['法術','skill',/法術/],['近戰','skill',/近戰/],['投射物','skill',/投射物/],
+  ['投擲','skill',/投擲/],['召喚物','skill',/召喚物/],['血魔法','skill',/血魔法/],['連擊','skill',/連擊/],['範圍','skill',/範圍技能/],
+  ['引導','skill',/引導/],['單體','skill',/單體/],['位移','skill',/瞬間移動|位移技能/],['增益','skill',/增益/],['詛咒','skill',/詛咒/],
+  ['附魔','skill',/附魔/],['荊棘','skill',/荊棘/],['指定技能','skill',/指定技能/],
+  ['火焰技能','skill',/火焰技能/],['冰冷技能','skill',/冰冷技能/],['閃電技能','skill',/閃電技能/],['毒素技能','skill',/毒素技能/],['神聖技能','skill',/神聖技能/],
+  // states
+  ['暴擊時','state',/(?<!非)暴擊時(?!不再)/],['對流血目標','state',/對流血的目標/],['對致盲目標','state',/致盲目標/],['對冰凍目標','state',/被冰凍目標/],
+  ['在空中','state',/當你在空中/],['貧血','state',/貧血時/],['近期格擋','state',/曾經格擋/],['高生命目標','state',/對生命值.*以上目標/],
+].map(([id,group,re])=>({id,group,re}));
+const CONDS_BY_ID=new Map(COND_DEFS.map(d=>[d.id,d]));
+const CATS=[
+  ['note','說明',/^※|^\(|^（/],
+  ['summon','召喚物',/召喚物/],
+  ['defense','防禦',/暴擊傷害減免|承受暴擊|避免暴擊/],
+  ['damage','傷害',/無視|穿透/],
+  ['crit','暴擊',/暴擊/],
+  ['ailment','異常狀態',/(?<!避免)(點燃|冰緩|兵緩|感電|中毒|流血|致盲|冰凍|暈眩機率|異常狀態|毒素傷害|層數)/],
+  ['resist','抗性',/(抗性|抗姓)(?!穿透)|避免.*機率|暈眩恢復/],
+  ['defense','防禦',/防禦力|格擋|迴避|閃避|物理減傷(?!.*無視)|傷害減免|承受|無敵時間/],
+  ['resource','生命/資源',/HP|MP|EP|藥水|藥劑|保留|魔力|恢復|鬥氣集中/],
+  ['attr','基礎屬性',/^(力量|敏捷|智力|幸運|全能力)$|點(力量|智力|敏捷)|(力量|敏捷|智力|幸運)(不再|可以)/],
+  ['speed','速度/移動',/速度|跳|瞬間移動距離|移動/],
+  ['damage','傷害',/傷害|攻擊力|命中|無視|穿透|投射物|範圍|技能/],
+].map(([id,label,re])=>({id,label,re}));
+const CAT_LABEL=Object.fromEntries([...CATS.map(c=>[c.id,c.label]),['other','其他']]);
+const CAT_ORDER=['attr','resource','defense','resist','speed','damage','crit','ailment','summon','other','note'];
+function autoClass(stat){
+  const s=String(stat||'');
+  const cat=(CATS.find(c=>c.re.test(s))||{id:'other'}).id;
+  const conds=[]; const wp=COND_DEFS.filter(d=>d.group==='weapon'&&d.re.test(s)).map(d=>d.id);
+  if(wp.length) conds.push(wp);
+  for(const d of COND_DEFS) if(d.group!=='weapon'&&d.re.test(s)) conds.push([d.id]);
+  if(cat==='note') conds.length=0;
+  return {cat,conds};
+}
+
+const _acCache=new Map();
+function statClass(stat){ let a=_acCache.get(stat); if(!a){ a=autoClass(stat); _acCache.set(stat,a); }
+  const o=board&&board.statClass&&board.statClass[stat]; if(!o) return a;
+  return {cat:o.cat||a.cat, conds:Array.isArray(o.conds)?o.conds:a.conds, manual:true}; }
+let condMode=false, activeConds=new Set();
+const condOK=conds=>conds.every(g=>g.some(c=>activeConds.has(c)));
+const statOff=stat=>condMode&&!condOK(statClass(stat).conds);
+const condTxt=conds=>conds.map(g=>g.join('/')).join(' + ');
+function condChips(conds){ return conds.length?`<span class="cds">${conds.map(g=>`<span class="cd${condMode&&g.some(c=>activeConds.has(c))?' ok':''}">${esc(g.join('/'))}</span>`).join('')}</span>`:''; }
+function modTipHTML(m){ return `<div${statOff(m.stat)?' class="moff"':''}>${esc(fmtMod(m))}${condChips(statClass(m.stat).conds)}</div>`; }
 const STAT_COLORS={'力量':'#d9534f','敏捷':'#3d8fd6','智力':'#e09a3e','幸運':'#7cc24a'};
 function optColor(o,k){ if(o.color) return o.color; for(const [s,c] of Object.entries(STAT_COLORS)) if((o.label||'').includes(s)) return c; return OPT_COLORS[k%OPT_COLORS.length]; }
 function pickColor(n){ const c=C(n); if(!c.choice||!alloc.has(n.id)||!hasPick(n.id)) return ''; const k=picks.get(n.id); return optColor(c.choice.options[k],k); }
@@ -516,9 +611,9 @@ function showTip(id,ev){
   const tip=$('tip'); const n=id&&byId.get(id);
   if(!n||drag){tip.hidden=true;return;}
   const cc=C(n);
-  let mods=(cc.modifiers||[]).map(m=>`<div>${esc(fmtMod(m))}</div>`).join('');
+  let mods=(cc.modifiers||[]).map(modTipHTML).join('');
   if(cc.choice){const k=picks.get(n.id);
-    mods+=`<div class="k">${esc(cc.choice.title||'可選擇')}（擇一）</div>`+cc.choice.options.map((o,i)=>`<div class="${i===k&&alloc.has(n.id)?'opt-on':''}">${i===k&&alloc.has(n.id)?'✓ ':'・'}${esc(o.label||'選項'+(i+1))}${o.modifiers.length?'：'+o.modifiers.map(m=>esc(fmtMod(m))).join('、'):''}</div>`).join('');}
+    mods+=`<div class="k">${esc(cc.choice.title||'可選擇')}（擇一）</div>`+cc.choice.options.map((o,i)=>`<div class="${i===k&&alloc.has(n.id)?'opt-on':''}">${i===k&&alloc.has(n.id)?'✓ ':'・'}${esc(o.label||'選項'+(i+1))}${o.modifiers.length?'：'+o.modifiers.map(m=>esc(fmtMod(m))+condChips(statClass(m.stat).conds)).join('、'):''}</div>`).join('');}
   if(!mods) mods='<div class="k">內容尚未設定</div>';
   tip.innerHTML=PLAYER?`<b>${esc(dispName(n)||'天賦')}</b>${mods}`:`<b>${esc(dispName(n)||n.id)}</b>${mods}<div class="k">${n.id} · ${n.kind}</div>`;
   const r=$('stage').getBoundingClientRect(); tip.hidden=false;
@@ -737,25 +832,56 @@ $('totals').addEventListener('click',ev=>{
   if(it){ const ids=it.dataset.ids.split(','); let i=+(it.dataset.i||-1); i=(i+1)%ids.length; it.dataset.i=i; const n=byId.get(ids[i]); if(!n) return;
     sel=n.id; if(vb.w>460){const f=400/vb.w; vb.w*=f; vb.h*=f;} vb.x=n.x-vb.w/2; vb.y=n.y-vb.h/2; setVB(); const keep=it.dataset.ids,ki=i; render();
     const again=$('totals').querySelector(`.src-it[data-ids="${keep}"]`); if(again) again.dataset.i=ki; return; }
+  const gh=ev.target.closest('.tgrp'); if(gh){ const g=gh.dataset.g; if(grpClosed.has(g)) grpClosed.delete(g); else grpClosed.add(g); renderTotals(); return; }
   const row=ev.target.closest('[data-k]'); if(!row) return;
   const k=row.dataset.k; if(totOpen.has(k)) totOpen.delete(k); else totOpen.add(k); renderTotals();
 });
+const grpClosed=new Set();
 function renderTotals(){
   const {m,un}=totals();
-  const all=[...m.values()].sort((a,b)=>a.stat.localeCompare(b.stat,'zh-Hant'));
+  const all=[...m.values()];
   const ATTR=['力量','敏捷','智力','幸運'];
   const isAttr=r=>!r.text&&ATTR.includes(r.stat);
-  const attrs=all.filter(isAttr).sort((a,b)=>ATTR.indexOf(a.stat)-ATTR.indexOf(b.stat)||a.slots[0].unit.localeCompare(b.slots[0].unit));
-  const rows=[...attrs,...all.filter(r=>!r.text&&!isAttr(r)),...all.filter(r=>r.text)];
-  $('totals').innerHTML=rows.length?rows.map(r=>decorateTot(r,(()=>{
-      const sep=(r===attrs[attrs.length-1]&&rows.length>attrs.length)?' sepb':'';
-      if(r.text) return `<dt class="fx">${esc(r.stat.split('{v}').join(''))}</dt><dd>${r.count>1?'×'+r.count:''}</dd>`;
-      if(r.stat.includes('{v}')){const parts=r.stat.split('{v}');let h='';parts.forEach((p,j)=>{h+=esc(p);if(j<parts.length-1){const x=r.slots[Math.min(j,r.slots.length-1)];h+=`<b class="tv">${fmtVal(x.value,x.unit)}</b>`;}});return `<dt>${h}</dt><dd></dd>`;}
-      if(isAttr(r)) return `<dt class="attr${sep}">${esc(r.stat)}</dt><dd class="attr${sep}">${fmtVal(r.slots[0].value,r.slots[0].unit)}</dd>`;
-      return `<dt>${esc(r.stat)}</dt><dd>${fmtVal(r.slots[0].value,r.slots[0].unit)}</dd>`;})())).join('')
-    :`<dt class="note">${alloc.size?'已投節點還沒有設定內容':'尚未投點'}</dt><dd></dd>`;
+  const grp=new Map(); let offN=0;
+  for(const r of all){ r.cls=statClass(r.stat); r.off=condMode&&!condOK(r.cls.conds); if(r.off) offN++;
+    const g=r.off?'off':r.cls.cat; if(!grp.has(g)) grp.set(g,[]); grp.get(g).push(r); }
+  const rowHTML=r=>{
+    if(r.text) return `<dt class="fx">${esc(r.stat.split('{v}').join(''))}</dt><dd>${r.count>1?'×'+r.count:''}</dd>`;
+    if(r.stat.includes('{v}')){const parts=r.stat.split('{v}');let h='';parts.forEach((p,j)=>{h+=esc(p);if(j<parts.length-1){const x=r.slots[Math.min(j,r.slots.length-1)];h+=`<b class="tv">${fmtVal(x.value,x.unit)}</b>`;}});return `<dt>${h}</dt><dd></dd>`;}
+    if(isAttr(r)) return `<dt class="attr">${esc(r.stat)}</dt><dd class="attr">${fmtVal(r.slots[0].value,r.slots[0].unit)}</dd>`;
+    return `<dt>${esc(r.stat)}</dt><dd>${fmtVal(r.slots[0].value,r.slots[0].unit)}</dd>`; };
+  const withConds=(html,r)=>{ html=html.replace('</dt>',condChips(r.cls.conds)+'</dt>'); if(r.off) html=html.replace('<dt ','<dt data-off ').replace('<dd ','<dd data-off '); return html; };
+  let h='';
+  for(const g of [...CAT_ORDER,'off']){ const rs=grp.get(g); if(!rs) continue;
+    rs.sort((a,b)=>(isAttr(b)-isAttr(a))||(isAttr(a)&&isAttr(b)?ATTR.indexOf(a.stat)-ATTR.indexOf(b.stat)||a.slots[0].unit.localeCompare(b.slots[0].unit):0)||(a.text-b.text)||a.stat.localeCompare(b.stat,'zh-Hant'));
+    const closed=grpClosed.has(g);
+    h+=`<dt class="tgrp${g==='off'?' off':''}${closed?' closed':''}" data-g="${g}">${g==='off'?'未生效（條件不符）':esc(CAT_LABEL[g]||g)}<small>${rs.length}</small></dt>`;
+    if(!closed) for(const r of rs) h+=withConds(decorateTot(r,rowHTML(r)),r);
+  }
+  $('totals').innerHTML=h||`<dt class="note">${alloc.size?'已投節點還沒有設定內容':'尚未投點'}</dt><dd></dd>`;
   $('unpicked').hidden=!un; $('unpicked').textContent=`有 ${un} 個可選擇節點尚未選擇，點選該節點後按「選擇」。`;
+  renderConds(all,offN);
 }
+/* conditions the current build satisfies; later the equipment / skill modules will fill activeConds automatically */
+function renderConds(rows,offN){
+  $('condMode').checked=condMode; const box=$('condChips'); box.hidden=!condMode;
+  $('condSum').textContent=condMode?(rows.length?`生效 ${rows.length-offN} · 未生效 ${offN}`:''):'';
+  if(!condMode) return;
+  const cnt=new Map(); for(const r of rows) for(const g of r.cls.conds) for(const c of g) cnt.set(c,(cnt.get(c)||0)+1);
+  for(const c of activeConds) if(!cnt.has(c)) cnt.set(c,0);
+  if(!cnt.size){ box.innerHTML='<p class="note">目前投的天賦沒有條件限制，全部生效。</p>'; return; }
+  const groups=[...COND_GROUPS,['other','其他']];
+  box.innerHTML=groups.map(([gid,gl])=>{ const ids=[...cnt.keys()].filter(c=>(CONDS_BY_ID.get(c)?.group||'other')===gid)
+      .sort((a,b)=>{const ia=COND_DEFS.findIndex(d=>d.id===a), ib=COND_DEFS.findIndex(d=>d.id===b); return (ia<0?999:ia)-(ib<0?999:ib)||a.localeCompare(b,'zh-Hant');});
+    if(!ids.length) return '';
+    return `<div class="cond-g"><span>${gl}</span>${ids.map(c=>`<button class="${activeConds.has(c)?'on':''}" data-c="${esc(c)}" aria-pressed="${activeConds.has(c)}">${esc(c)}${cnt.get(c)?`<small>${cnt.get(c)}</small>`:''}</button>`).join('')}</div>`; }).join('')
+    +`<div class="row" style="justify-content:flex-end"><button class="cond-clr" id="condClr"${activeConds.size?'':' disabled'}>清除條件</button></div>`;
+}
+$('condMode').onchange=e=>{ condMode=e.target.checked; render(); };
+$('condChips').addEventListener('click',e=>{
+  if(e.target.closest('#condClr')){ activeConds.clear(); render(); return; }
+  const b=e.target.closest('button[data-c]'); if(!b) return; const c=b.dataset.c;
+  if(activeConds.has(c)) activeConds.delete(c); else activeConds.add(c); render(); });
 function hoverPlay(id){
   if(mode!=='play'||!$('ruleConn').checked||!id||alloc.has(id)){if(preview){preview=null;render();}return;}
   const p=shortestPath(id);
@@ -767,8 +893,8 @@ function hoverPlay(id){
 }
 
 /* ---------- editing ---------- */
-function snapshot(){markDirty();hist.push(JSON.stringify({nodes:board.nodes,edges:board.edges,startIds:board.startIds,templates:board.templates,version:board.version,versionNote:board.versionNote,progression:board.progression}));if(hist.length>100)hist.shift();}
-function undo(){if(!hist.length){toast('沒有可復原的步驟');return;}const s=JSON.parse(hist.pop());Object.assign(board,s);renderVer();renderProg();if(!board.templates)board.templates=defaultTemplates();rebuild();render();edRender();renderTplList();if(tplEditing)openTplEd(tplEditing);}
+function snapshot(){markDirty();hist.push(JSON.stringify({nodes:board.nodes,edges:board.edges,startIds:board.startIds,templates:board.templates,version:board.version,versionNote:board.versionNote,progression:board.progression,statClass:board.statClass||{}}));if(hist.length>100)hist.shift();}
+function undo(){if(!hist.length){toast('沒有可復原的步驟');return;}const s=JSON.parse(hist.pop());Object.assign(board,s);renderVer();renderProg();if(!board.templates)board.templates=defaultTemplates();rebuild();render();edRender();renderTplList();if(tplEditing)openTplEd(tplEditing);renderCls();}
 function removeNode(id){snapshot();board.nodes=board.nodes.filter(n=>n.id!==id);alloc.delete(id);picks.delete(id);if(sel===id)sel=null;rebuild();render();}
 function removeEdge(i){snapshot();board.edges.splice(i,1);rebuild();render();}
 function addEdge(a,b){
@@ -877,7 +1003,7 @@ function askConfirm(title,html,yesText,noText,onYes,onNo){
   $('picker').hidden=true; $('confirm').hidden=false; $('confirmYes').focus();
 }
 /* offer the newest board version; remembers "keep" per (current, latest) pair so it does not nag every reload */
-const LS_VSKIP='tli-ver-skip-v1';
+const LS_VSKIP='lootania-ver-skip-v1';
 function offerLatest(reason){
   if(!MANIFEST||isLatest(board.version)) return false;
   const latest=latestVer(), cur=board.version||'', key=cur+'→'+latest;
@@ -1088,7 +1214,7 @@ function bindForm(box,getObj,rerender){
 function edRender(){
   const box=$('contentEd'); const n=mode==='edit'&&sel&&byId.get(sel);
   edFor=n?n.id:null;
-  $('tplSec').hidden=mode!=='edit';
+  $('tplSec').hidden=mode!=='edit'; $('clsSec').hidden=mode!=='edit'; if(mode==='edit') renderCls();
   if(!n){box.hidden=true;box.innerHTML='';return;}
   box.hidden=false; const t=n.tpl&&tplById(n.tpl);
   const opts=`<option value="">自訂內容（只用在這個節點）</option>`+board.templates.map(x=>`<option value="${x.id}"${t&&t.id===x.id?' selected':''}>${esc(x.name||'(未命名)')}</option>`).join('');
@@ -1172,7 +1298,7 @@ $('resetBoard').onclick=()=>{
 };
 
 /* ---------- player build save/load ---------- */
-function buildData(){return {type:'tli-build',boardVersion:board.version||'',boardFile:CUR_FILE||undefined,start:board.startIds.find(x=>alloc.has(x))||null,alloc:[...alloc],picks:[...picks],lastPick,autoPick3:$('autoPick').checked,stages:stages.map(x=>({name:x.name,alloc:x.alloc,picks:x.picks})),savedAt:new Date().toISOString()};}
+function buildData(){return {type:'lootania-build',boardVersion:board.version||'',boardFile:CUR_FILE||undefined,start:board.startIds.find(x=>alloc.has(x))||null,alloc:[...alloc],picks:[...picks],lastPick,autoPick3:$('autoPick').checked,stages:stages.map(x=>({name:x.name,alloc:x.alloc,picks:x.picks})),condMode,conds:[...activeConds],savedAt:new Date().toISOString()};}
 /* ---------- board versions (folder + manifest; used by the website build) ---------- */
 let MANIFEST=null, CUR_FILE=null;
 function verEntry(v){return MANIFEST&&MANIFEST.boards.find(b=>b.version===v);}
@@ -1231,6 +1357,7 @@ function applyBuild(s,quiet){
   { const st=s.alloc.find(id=>isStart(id)&&byId.has(id)); alloc=new Set(s.alloc.filter(id=>byId.has(id)&&(!isStart(id)||id===st))); } picks=new Map((s.picks||[]).filter(([id])=>alloc.has(id)));
   lastPick=s.lastPick||{}; $('autoPick').checked=s.autoPick3===true; pickQueue=[]; pendingBatch=null; $('picker').hidden=true;
   stages=cleanStages(s.stages); stEditing=null;
+  condMode=s.condMode===true; activeConds=new Set(Array.isArray(s.conds)?s.conds.map(String).slice(0,200):[]);
   render();
   const warn=(s.boardVersion&&s.boardVersion!==(board.version||''))?`（此配點是在 ${s.boardVersion} 建立，目前是 ${board.version||'未標版本'}）`:'';
   if(spent()>capPts()) showAlert('天賦點超過上限',`這份配點共 <span class="cnt">${spent()}</span> 點，超過目前上限 <span class="cnt">${capPts()}</span> 點，請取消部分天賦。`);
@@ -1247,6 +1374,35 @@ async function saveBuild(){
   if(await saveText(`build_${ds}_${spent()}pt.json`,JSON.stringify(buildData(),null,2))) toast(`已儲存流派（${board.version||'未標版本'}）`);
 }
 $('bSave').onclick=saveBuild;
+/* ---------- stat classification overrides (editor) ---------- */
+function allStats(){ const m=new Map(); const add=list=>{ for(const x of list||[]) if(x&&x.stat) m.set(x.stat,(m.get(x.stat)||0)+1); };
+  for(const t of board.templates||[]){ add(t.modifiers); if(t.choice) for(const o of t.choice.options) add(o.modifiers); }
+  for(const n of board.nodes){ if(n.tpl&&tplById(n.tpl)) continue; add(n.modifiers); if(n.choice) for(const o of n.choice.options) add(o.modifiers); }
+  return m; }
+function parseConds(txt){ txt=String(txt||'').trim(); if(!txt) return null; if(txt==='-'||txt==='－') return [];
+  return txt.split(/[+＋]/).map(g=>g.split(/[\/／|｜]/).map(x=>x.trim()).filter(Boolean)).filter(g=>g.length); }
+let clsT=0;
+function renderCls(){ if(PLAYER||$('clsSec').hidden) return; cancelAnimationFrame(clsT); clsT=requestAnimationFrame(()=>{
+  const st=allStats(), q=$('clsQ').value.trim(), man=$('clsMan').checked, ov=board.statClass||{};
+  const rows=[...st.entries()].map(([stat,n])=>({stat,n,a:(_acCache.get(stat)||autoClass(stat)),o:ov[stat]}))
+    .filter(r=>!man||r.o).filter(r=>!q||(r.stat+' '+CAT_LABEL[statClass(r.stat).cat]+' '+condTxt(statClass(r.stat).conds)).includes(q))
+    .sort((x,y)=>CAT_ORDER.indexOf(statClass(x.stat).cat)-CAT_ORDER.indexOf(statClass(y.stat).cat)||y.n-x.n||x.stat.localeCompare(y.stat,'zh-Hant'));
+  $('clsCnt').textContent=`${Object.keys(ov).length?Object.keys(ov).length+' 覆寫 · ':''}${st.size}`;
+  const opts=sel=>CAT_ORDER.map(c=>`<option value="${c}"${sel===c?' selected':''}>${CAT_LABEL[c]}</option>`).join('');
+  $('clsList').innerHTML=rows.length?rows.map(r=>`<div class="cls-row${r.o?' man':''}" data-s="${esc(r.stat)}"><div class="cls-st">${esc(r.stat)}<small>×${r.n}</small></div>`+
+    `<select class="cls-cat" aria-label="分類"><option value="">自動：${CAT_LABEL[r.a.cat]}</option>${opts(r.o&&r.o.cat)}</select>`+
+    `<input type="text" class="cls-cd" aria-label="生效條件" placeholder="自動：${esc(condTxt(r.a.conds)||'無條件')}" value="${r.o&&Array.isArray(r.o.conds)?esc(r.o.conds.length?condTxt(r.o.conds):'-'):''}"></div>`).join('')
+    :'<p class="note">沒有符合的詞綴</p>';
+}); }
+function setCls(stat,patch){ snapshot(); const ov=board.statClass||(board.statClass={}); const o={...(ov[stat]||{}),...patch};
+  for(const k of Object.keys(o)) if(o[k]==null||o[k]==='') delete o[k];
+  if(Object.keys(o).length) ov[stat]=o; else delete ov[stat]; if(!Object.keys(ov).length) delete board.statClass;
+  scheduleSave(); render(); renderCls(); }
+$('clsQ').addEventListener('input',renderCls); $('clsMan').onchange=renderCls;
+$('clsList').addEventListener('change',e=>{ const row=e.target.closest('.cls-row'); if(!row) return; const stat=row.dataset.s;
+  if(e.target.classList.contains('cls-cat')) setCls(stat,{cat:e.target.value||null});
+  else if(e.target.classList.contains('cls-cd')){ const c=parseConds(e.target.value); setCls(stat,{conds:c}); toast(c===null?'已改回自動判斷':c.length?`條件：${condTxt(c)}`:'設為無條件'); } });
+
 /* ---------- build stages: named snapshots of the allocation (e.g. Lv 30 / Lv 50 / 完成) ---------- */
 let stages=[], stEditing=null;
 const stPts=t=>t.alloc.filter(x=>byId.has(x)&&!isStart(x)).length;
@@ -1302,7 +1458,7 @@ function gotoStage(i){
   else go();
 }
 $('stSave').onclick=saveStage;
-{ const LS_ST='tli-stage-open-v1', box=$('stageSec'), set=o=>{ box.classList.toggle('closed',!o); $('stToggle').setAttribute('aria-expanded',o); };
+{ const LS_ST='lootania-stage-open-v1', box=$('stageSec'), set=o=>{ box.classList.toggle('closed',!o); $('stToggle').setAttribute('aria-expanded',o); };
   try{ set(localStorage.getItem(LS_ST)!=='0'); }catch(e){}
   $('stToggle').onclick=()=>{ const o=box.classList.contains('closed'); set(o); try{ localStorage.setItem(LS_ST,o?'1':'0'); }catch(e){} }; }
 $('stName').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); saveStage(); } });
@@ -1345,11 +1501,13 @@ function encodeShare(){
   vPush(a,ids.length); let prev=0; for(const k of ids){ vPush(a,k-prev); prev=k; }
   const pk=[...picks].filter(([id])=>alloc.has(id)).map(([id,k])=>[idNum(id),k]).sort((x,y)=>x[0]-y[0]);
   vPush(a,pk.length); prev=0; for(const [id,k] of pk){ vPush(a,id-prev); prev=id; vPush(a,k); }
-  if(stages.length){ vPush(a,stages.length); for(const t of stages){   // optional stage block (older readers ignore it)
+  const hasCond=condMode||activeConds.size>0;
+  if(stages.length||hasCond){ vPush(a,stages.length); for(const t of stages){   // optional stage block (older readers ignore it)
     const nm=new TextEncoder().encode(t.name); vPush(a,nm.length); nm.forEach(x=>a.push(x));
     const sst=t.alloc.find(x=>isStart(x)); vPush(a,sst?idNum(sst):0);
     const si=t.alloc.filter(x=>!isStart(x)).map(idNum).sort((x,y)=>x-y); vPush(a,si.length); prev=0; for(const k of si){ vPush(a,k-prev); prev=k; }
     const sp=t.picks.map(([id,k])=>[idNum(id),k]).sort((x,y)=>x[0]-y[0]); vPush(a,sp.length); prev=0; for(const [id,k] of sp){ vPush(a,id-prev); prev=id; vPush(a,k); } } }
+  if(hasCond){ vPush(a,condMode?1:0); const cl=[...activeConds]; vPush(a,cl.length); for(const c of cl){ const e=new TextEncoder().encode(c); vPush(a,e.length); e.forEach(x=>a.push(x)); } }
   let sum=0; for(const x of a) sum=(sum*31+x)%251; a.push(sum);
   return SH_PREFIX+b64u(a);
 }
@@ -1367,7 +1525,8 @@ function decodeShare(code){
     const ss=vRead(b,p); const al=ss?['n'+ss]:[]; const c=vRead(b,p); prev=0; for(let i=0;i<c;i++){ prev+=vRead(b,p); al.push('n'+prev); }
     const q=vRead(b,p); const sp=[]; prev=0; for(let i=0;i<q;i++){ prev+=vRead(b,p); sp.push(['n'+prev,vRead(b,p)]); }
     stL.push({name,alloc:al,picks:sp}); } }
-  return {type:'tli-build',boardVersion:ver,start:st,alloc:allocL,picks:pk,stages:stL,lastPick,autoPick3:$('autoPick').checked};
+  let cm=false; const cl=[]; if(p.i<b.length-1){ cm=vRead(b,p)===1; const nc=vRead(b,p); for(let j=0;j<nc;j++){ const l=vRead(b,p); cl.push(new TextDecoder().decode(b.slice(p.i,p.i+l))); p.i+=l; } }
+  return {type:'lootania-build',boardVersion:ver,start:st,alloc:allocL,picks:pk,stages:stL,condMode:cm,conds:cl,lastPick,autoPick3:$('autoPick').checked};
 }
 async function copyText(s,okMsg){
   try{ await navigator.clipboard.writeText(s); toast(okMsg); }

@@ -1,6 +1,5 @@
-# 把 talent/ 與 wiki/ 組合成一個 GitHub Pages 網站：
+# 把 talent/ 發佈成 GitHub Pages 網站：
 #   talent/  →  網站根目錄    https://<帳號>.github.io/<repo>/        （天賦網址維持不變）
-#   wiki/    →  /wiki/        https://<帳號>.github.io/<repo>/wiki/
 # 使用前：Settings → Pages → Build and deployment → Source 選「GitHub Actions」
 name: Deploy GitHub Pages
 
@@ -29,7 +28,6 @@ jobs:
           set -euo pipefail
           test -f talent/index.html || { echo "::error::找不到 talent/index.html"; exit 1; }
           test -f talent/boards/index.json || { echo "::error::找不到 talent/boards/index.json"; exit 1; }
-          if [ -e talent/wiki ]; then echo "::error::talent/ 裡不能有 wiki 資料夾，會和 /wiki/ 網址衝突"; exit 1; fi
           python3 - <<'PY'
           import json, sys
           m = json.load(open('talent/boards/index.json', encoding='utf-8'))
@@ -53,7 +51,6 @@ jobs:
           set -euo pipefail
           mkdir -p _site
           cp -a talent/. _site/
-          if [ -d wiki ]; then mkdir -p _site/wiki && cp -a wiki/. _site/wiki/; fi
           touch _site/.nojekyll
           echo "網站內容："; find _site -maxdepth 2 | sort
 

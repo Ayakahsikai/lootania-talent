@@ -27,7 +27,7 @@ body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--f-ui);margin:0}
 .stage{position:relative;overflow:hidden;background:radial-gradient(circle at 50% 48%,#1a1a1f 0,var(--bg) 70%);touch-action:none;min-height:360px}
 #svg{width:100%;height:100%;display:block;cursor:grab;user-select:none}
 #svg.panning{cursor:grabbing}
-.hud{position:absolute;left:16px;top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;pointer-events:none}
+.hud{position:absolute;left:16px;right:16px;top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;pointer-events:none}
 .hud>*{pointer-events:auto}
 .hudcol{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;pointer-events:none}.hudcol>*{pointer-events:auto}
 .hud{align-items:flex-start}
@@ -44,7 +44,7 @@ svg.searching .e{opacity:.3}
 svg.searching .n.dim{opacity:.22}
 .n.hit{stroke:#4fd6e8;stroke-width:2.2}
 .n.hit.cur{stroke:#fff;stroke-width:2.8}
-.chip.over{border-color:var(--warn);color:var(--warn)}
+.chip.over,.chip.over b,.chip.over span{border-color:#ff5d5d;color:#ff5d5d}
 .chip b{color:var(--accent);font-weight:500}
 .zoom{position:absolute;right:12px;bottom:12px;display:flex;flex-direction:column;gap:6px}
 .panel{background:var(--panel);border-left:1px solid var(--line);overflow:auto;padding-inline:16px;padding-block:14px;display:flex;flex-direction:column;gap:16px}
@@ -67,7 +67,8 @@ input[type=range]{flex:1;accent-color:var(--accent)}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font:12px var(--f-mono)}
 .kv dt{color:var(--muted)} .kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
 .note{font-size:12px;color:var(--muted);margin:0}
-.hud-stage{position:absolute;left:0;top:calc(100% + 6px);width:280px;max-width:calc(100vw - 32px);background:rgba(23,23,27,.92);border:1px solid var(--line);border-radius:10px;padding:6px 8px 8px;box-sizing:border-box}
+.hud-br{flex-basis:100%;height:0}
+.hud-stage{width:280px;max-width:calc(100vw - 32px);background:rgba(23,23,27,.92);border:1px solid var(--line);border-radius:10px;padding:6px 8px 8px;box-sizing:border-box}
 .st-head{display:flex;align-items:center;gap:6px;width:100%;border:0;background:transparent;padding:2px 0 6px;font:500 11px var(--f-ui);letter-spacing:.12em;color:var(--muted)}
 .st-head i{margin-left:auto;font-style:normal;transition:transform .15s}
 .hud-stage.closed .st-head{padding-bottom:0}.hud-stage.closed .st-head i{transform:rotate(-90deg)}.hud-stage.closed .st-body{display:none}
@@ -213,14 +214,15 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .pk-later{margin-top:10px;font-size:12px;padding:3px 10px;background:transparent}
 .n.empty{stroke:#ff5d5d;stroke-width:1.4;stroke-dasharray:1.6 1}
 .n.filled{opacity:.55}
-.n.picked{stroke:#fff3d0;stroke-width:1.4}
+.n.picked{stroke:var(--accent);stroke-width:.3}
 .icbg{fill:#0b0b0d;pointer-events:none}
 .ic{pointer-events:none;overflow:hidden;filter:brightness(.62) saturate(.55)}
 .ic.on{filter:brightness(1.4) saturate(1.2)}
 .ic.dim{opacity:.15}
 .n.hasicon{fill:#000;fill-opacity:0;pointer-events:all;stroke:none}
-.n.hasicon.on{stroke:none}
-.n.hasicon.picked{stroke-width:.5}
+.n.hasicon.on{stroke:var(--accent);stroke-width:.25}
+.n.hasicon.picked{stroke-width:.25}
+.ictint{pointer-events:none;mix-blend-mode:color;opacity:.9}
 .n.hasicon.reach{stroke:var(--accent);stroke-width:.4;stroke-opacity:.8}
 .n.hasicon.preview{stroke:var(--accent);stroke-width:.6;stroke-dasharray:1.2 .8}
 .n.hasicon.start{stroke:var(--start);stroke-width:.7}
@@ -228,7 +230,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .n.hasicon.sel,.n.hasicon:hover{stroke:#fff;stroke-width:.6}
 .n.hasicon.empty{stroke:#ff5d5d;stroke-width:1.2;stroke-dasharray:1.6 1}
 .n.dot{fill:#8f8f96}
-.n.dot.on{fill:#fff4d6}
+.n.dot.on{fill:#fff4d6;stroke:var(--accent);stroke-width:.3}
 .n.needpick{stroke:var(--warn);stroke-width:1.6;stroke-dasharray:1.5 1}
 .tip .opt-on{color:var(--accent)}
 @media (prefers-reduced-motion:reduce){.toast{transition:none}}
@@ -247,18 +249,19 @@ button:disabled{opacity:.45;cursor:not-allowed}
       <div class="hudcol">
         <span class="chip" id="lvChip" title="投入目前點數所需的等級（假設任務天賦點都已取得）">需求等級 <b id="lvNeed">Lv 1</b></span>
         <span class="chip ed-only" id="modeChip">投點模式</span>
-        <div class="hud-stage pl-only" id="stageSec">
-          <button class="st-head" id="stToggle" aria-expanded="true" title="點一下階段即可切換到該階段的配點；階段會跟著流派檔案、分享碼一起保存">階段配點 <span id="stCnt" class="nb-cnt"></span><i>▾</i></button>
-          <div class="st-body">
-            <div class="st-add"><input type="text" id="stName" maxlength="40" placeholder="階段名稱（留空＝以等級命名）" aria-label="階段名稱"><button id="stSave" class="primary">存成階段</button></div>
-            <div id="stList" class="st-list"></div>
-          </div>
-        </div>
       </div>
       <span class="chip" id="ptChip">已投 <b id="cnt">0</b> / <span id="capPts">77</span> 點</span>
       <select id="startSel" class="startsel" aria-label="選擇起點"></select>
       <span class="search" id="searchBox"><input id="search" type="search" placeholder="搜尋天賦（空格＝且，｜＝或，-詞＝排除）" title="例：暴擊 -短杖　　拳套 投射物　　敏捷｜智力" aria-label="搜尋天賦" autocomplete="off"><span id="searchCnt"></span><button id="sPrev" aria-label="上一個">‹</button><button id="sNext" aria-label="下一個">›</button></span>
       <span class="chip" id="startChip" style="color:var(--start);border-color:var(--start)">← 請先選擇起點</span>
+      <div class="hud-br" aria-hidden="true"></div>
+      <div class="hud-stage pl-only" id="stageSec">
+        <button class="st-head" id="stToggle" aria-expanded="true" title="點一下階段即可切換到該階段的配點；階段會跟著流派檔案、分享碼一起保存">階段配點 <span id="stCnt" class="nb-cnt"></span><i>▾</i></button>
+        <div class="st-body">
+          <div class="st-add"><input type="text" id="stName" maxlength="40" placeholder="階段名稱（留空＝以等級命名）" aria-label="階段名稱"><button id="stSave" class="primary">存成階段</button></div>
+          <div id="stList" class="st-list"></div>
+        </div>
+      </div>
     </div>
     <div class="zoom">
       <button id="zIn" aria-label="放大">＋</button>
@@ -479,23 +482,26 @@ function pathD(e){
 }
 function radius(n){ if(n.iconSize) return Math.max(1.2,n.iconSize/2); return n.kind==='start'?5.5:n.kind==='notable'?4.5:n.kind==='medium'?3.4:n.kind==='hub'?2.2:n.kind==='junction'?1.6:2.5;}
 /* ---------- node icons (sprite sheet stored in board.iconSheet) ---------- */
-const icState=new Map(); let icBoard=null, icSheet=null, icEls=new Map();
+const icState=new Map(); let icBoard=null, icSheet=null, icEls=new Map(), icTint=new Map();
 function hasIcon(n){ return !!(board.iconSheet&&n.icon!=null&&n.icon>=0); }
 function renderIcons(){
   const sh=board.iconSheet;
-  if(!sh){ if(icBoard){ $('gI').innerHTML=''; $('gDefs').innerHTML=''; icBoard=null; icEls.clear(); } return; }
+  if(!sh){ if(icBoard){ $('gI').innerHTML=''; $('gDefs').innerHTML=''; icBoard=null; icEls.clear(); icTint.clear(); } return; }
   if(icSheet!==sh.src){ $('gDefs').innerHTML=`<image id="isheet" href="${sh.src}" width="${sh.w}" height="${sh.h}"/>`; icSheet=sh.src; icBoard=null; }
   if(icBoard!==board||mode==='edit'){
     let h=''; const cell=sh.cell, cols=sh.cols;
     for(const n of board.nodes){ if(!hasIcon(n)) continue; const r=radius(n), cx=(n.icon%cols)*cell, cy=Math.floor(n.icon/cols)*cell;
-      h+=`<circle class="icbg" cx="${n.x}" cy="${n.y}" r="${r}"/><svg class="ic" data-i="${n.id}" preserveAspectRatio="xMidYMid slice" x="${n.x-r}" y="${n.y-r}" width="${2*r}" height="${2*r}" viewBox="${cx} ${cy} ${cell} ${cell}"><use href="#isheet"/></svg>`; }
-    $('gI').innerHTML=h; icEls=new Map([...$('gI').children].filter(e=>e.dataset.i).map(e=>[e.dataset.i,e])); icBoard=board;
+      h+=`<circle class="icbg" cx="${n.x}" cy="${n.y}" r="${r}"/><svg class="ic" data-i="${n.id}" preserveAspectRatio="xMidYMid slice" x="${n.x-r}" y="${n.y-r}" width="${2*r}" height="${2*r}" viewBox="${cx} ${cy} ${cell} ${cell}"><use href="#isheet"/></svg><circle class="ictint" data-t="${n.id}" cx="${n.x}" cy="${n.y}" r="${r}" fill="none"/>`; }
+    $('gI').innerHTML=h; icEls=new Map([...$('gI').children].filter(e=>e.dataset.i).map(e=>[e.dataset.i,e]));
+    icTint=new Map([...$('gI').querySelectorAll('.ictint')].map(e=>[e.dataset.t,e])); icBoard=board;
   }
   for(const [id,e] of icEls){ const s='ic'+(icState.get(id)||''); if(e.getAttribute('class')!==s) e.setAttribute('class',s); }
+  // 已選擇的屬性節點：整顆圖示染成該屬性顏色（細框之外更容易辨識）
+  for(const [id,e] of icTint){ const n=byId.get(id), pc=n?pickColor(n):''; const f=pc||'none'; if(e.getAttribute('fill')!==f) e.setAttribute('fill',f); }
 }
 function render(){
   const pe = preview? new Set(preview.edges):null, pn = preview? new Set(preview.nodes):null;
-  const reach = reachable(); const sq=searchQ; svg.classList.toggle('searching',!!sq);
+  const sq=searchQ; svg.classList.toggle('searching',!!sq);
   let eh='', nh='';
   board.edges.forEach((e,i)=>{
     const on = alloc.has(e.from)&&alloc.has(e.to);
@@ -508,7 +514,6 @@ function render(){
     if(mode==='edit'&&$('markEmpty').checked&&!isJunction(n)) c+=hasContent(n)?' filled':' empty';
     if(alloc.has(n.id)){c+=' on'; if(C(n).choice&&!hasPick(n.id))c+=' needpick';}
     else if(pn&&pn.has(n.id))c+=' preview';
-    else if(mode==='play'&&$('ruleConn').checked&&reach.has(n.id))c+=' reach';
     if(board.startIds.includes(n.id))c+=' start';
     if(n.id===sel||n.id===linkFrom)c+=' sel';
     if(sq){ if(searchSet.has(n.id)) c+=' hit'+(n.id===searchCur?' cur':''); else c+=' dim'; }
@@ -740,7 +745,7 @@ function allocClick(id,conn){
 let pendingBatch=null;
 function allocate(ids){
   { const add=ids.filter(x=>!alloc.has(x)&&!isStart(x)).length, cur=spent(), cap=capPts();
-    if(add&&cur+add>cap){ showAlert('天賦點不足',`這次需要 <span class="cnt">${add}</span> 點，目前已投 ${cur} 點，上限 <span class="cnt">${cap}</span> 點（Lv ${prog().maxLevel} ＋任務），還差 <span class="cnt">${cur+add-cap}</span> 點。<br><br>請先取消其他天賦，或改點較近的節點。`); preview=null; render(); return; } }
+    if(add&&cur+add>cap) setTimeout(()=>toast(`已投 ${cur+add} 點，超過上限 ${cap} 點（Lv ${prog().maxLevel} ＋任務）${cur+add-cap} 點`),0); }
   const undoState={alloc:new Set(alloc),picks:new Map(picks)};
   ids.forEach(x=>alloc.add(x));
   const need=ids.filter(x=>{const c=C(byId.get(x));return c.choice&&c.choice.options.length&&!hasPick(x);});
@@ -1360,7 +1365,7 @@ function applyBuild(s,quiet){
   condMode=s.condMode===true; activeConds=new Set(Array.isArray(s.conds)?s.conds.map(String).slice(0,200):[]);
   render();
   const warn=(s.boardVersion&&s.boardVersion!==(board.version||''))?`（此配點是在 ${s.boardVersion} 建立，目前是 ${board.version||'未標版本'}）`:'';
-  if(spent()>capPts()) showAlert('天賦點超過上限',`這份配點共 <span class="cnt">${spent()}</span> 點，超過目前上限 <span class="cnt">${capPts()}</span> 點，請取消部分天賦。`);
+  if(spent()>capPts()) setTimeout(()=>toast(`這份配點共 ${spent()} 點，超過上限 ${capPts()} 點`),0);
   if(!quiet||warn||miss.length) toast(`已讀取配點：${spent()} 點${miss.length?`，${miss.length} 個節點已不存在`:''}${warn}`);
 }
 async function saveText(name,text){
@@ -1435,7 +1440,6 @@ function renderStages(force){
 }
 function saveStage(){
   if(!hasStart()||!spent()){ toast('請先選擇起點並投點'); return; }
-  if(spent()>capPts()){ toast(`目前 ${spent()} 點超過上限 ${capPts()} 點，請先調整`); return; }
   const typed=$('stName').value.trim().slice(0,40), name=typed||stDefaultName(), sig=curSig();
   const same=stages.find(t=>stSig(t)===sig&&t.name!==name);
   if(same){ toast(`這份配點和「${same.name}」相同，未重複儲存`); return; }

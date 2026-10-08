@@ -3651,17 +3651,17 @@
       "confidence": "placeholder",
       "modifiers": [
         {
-          "stat": "火焰抗姓",
+          "stat": "火焰抗性",
           "value": 8,
           "unit": "percent"
         },
         {
-          "stat": "冰冷抗姓",
+          "stat": "冰冷抗性",
           "value": 8,
           "unit": "percent"
         }
       ],
-      "name": "火焰與冰冷抗姓",
+      "name": "火焰與冰冷抗性",
       "iconSize": 5.12,
       "icon": 144
     },
@@ -4350,17 +4350,17 @@
       "confidence": "placeholder",
       "modifiers": [
         {
-          "stat": "火焰抗姓",
+          "stat": "火焰抗性",
           "value": 8,
           "unit": "percent"
         },
         {
-          "stat": "冰冷抗姓",
+          "stat": "冰冷抗性",
           "value": 8,
           "unit": "percent"
         }
       ],
-      "name": "火焰與冰冷抗姓",
+      "name": "火焰與冰冷抗性",
       "iconSize": 5.23,
       "icon": 177
     },
@@ -6097,17 +6097,17 @@
       "confidence": "verified",
       "modifiers": [
         {
-          "stat": "火焰抗姓",
+          "stat": "火焰抗性",
           "value": 8,
           "unit": "percent"
         },
         {
-          "stat": "冰冷抗姓",
+          "stat": "冰冷抗性",
           "value": 8,
           "unit": "percent"
         }
       ],
-      "name": "火焰與冰冷抗姓",
+      "name": "火焰與冰冷抗性",
       "iconSize": 5.48,
       "icon": 260
     },
@@ -8117,17 +8117,17 @@
           "unit": "percent"
         },
         {
-          "stat": "火焰抗姓",
+          "stat": "火焰抗性",
           "value": 4,
           "unit": "percent"
         },
         {
-          "stat": "冰冷抗姓",
+          "stat": "冰冷抗性",
           "value": 4,
           "unit": "percent"
         },
         {
-          "stat": "閃電抗姓",
+          "stat": "閃電抗性",
           "value": 4,
           "unit": "percent"
         }
@@ -9964,17 +9964,17 @@
           "unit": "percent"
         },
         {
-          "stat": "火焰抗姓",
+          "stat": "火焰抗性",
           "value": 10,
           "unit": "percent"
         },
         {
-          "stat": "冰冷抗姓",
+          "stat": "冰冷抗性",
           "value": 10,
           "unit": "percent"
         },
         {
-          "stat": "閃電抗姓",
+          "stat": "閃電抗性",
           "value": 10,
           "unit": "percent"
         },
@@ -11086,12 +11086,12 @@
       "confidence": "placeholder",
       "modifiers": [
         {
-          "stat": "最大毒素抗姓",
+          "stat": "最大毒素抗性",
           "value": 2,
           "unit": "percent"
         }
       ],
-      "name": "最大毒素抗姓II",
+      "name": "最大毒素抗性II",
       "iconSize": 6.6,
       "icon": 478
     },
@@ -18927,12 +18927,12 @@
       "confidence": "placeholder",
       "modifiers": [
         {
-          "stat": "冰冷抗姓",
+          "stat": "冰冷抗性",
           "value": 16,
           "unit": "percent"
         }
       ],
-      "name": "冰冷抗姓",
+      "name": "冰冷抗性",
       "iconSize": 5.48,
       "icon": 858
     },
@@ -19047,17 +19047,17 @@
           "unit": "percent"
         },
         {
-          "stat": "火焰抗姓",
+          "stat": "火焰抗性",
           "value": 4,
           "unit": "percent"
         },
         {
-          "stat": "冰冷抗姓",
+          "stat": "冰冷抗性",
           "value": 4,
           "unit": "percent"
         },
         {
-          "stat": "閃電抗姓",
+          "stat": "閃電抗性",
           "value": 4,
           "unit": "percent"
         }
@@ -19224,7 +19224,7 @@
       "confidence": "placeholder",
       "modifiers": [
         {
-          "stat": "閃電抗姓",
+          "stat": "閃電抗性",
           "value": 16,
           "unit": "percent"
         }

@@ -233,7 +233,8 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .n.picked{stroke:var(--accent);stroke-width:.3}
 .icbg{fill:#0b0b0d;pointer-events:none}
 .ic{pointer-events:none;overflow:hidden}
-.ic.dim{opacity:.15}
+image.ic.dim,svg.ic.dim>image{opacity:.15}
+svg.ic.dim>image[data-faded]{opacity:1}
 .n.hasicon{fill:#000;fill-opacity:0;pointer-events:all;stroke:none}
 .n.hasicon.on{stroke:var(--accent);stroke-width:.25}
 .n.hasicon.picked{stroke-width:.25}
@@ -521,37 +522,97 @@ function hasIcon(n){ return !!(board.iconSheet&&n.icon!=null&&n.icon>=0); }
 /* 圖示：載入時把合圖切成每個節點各自的小圖（未點＝暗、已點＝亮兩種），每顆圖示是一個獨立的 <image>。
    不用 <use> 參照整張大合圖、也不用 CSS filter——這兩者在 1000 個節點時會讓樣式計算與平移縮放非常慢。 */
 const icCache=new Map(); let icCacheSrc=null, icBakeJob=0, icPix=null;
-function icVariant(i,{b,m}){ const {all,W,c,cols,cv}=icPix, ctx=cv.getContext('2d'), sx=(i%cols)*c, sy=Math.floor(i/cols)*c, o=ctx.createImageData(c,c), a=o.data;
-  for(let y=0;y<c;y++){ let s0=((sy+y)*W+sx)*4, d0=y*c*4;
-    for(let x=0;x<c;x++,s0+=4,d0+=4){ const r=all[s0]*b,g=all[s0+1]*b,bl=all[s0+2]*b;
-      a[d0]=m[0]*r+m[1]*g+m[2]*bl; a[d0+1]=m[3]*r+m[4]*g+m[5]*bl; a[d0+2]=m[6]*r+m[7]*g+m[8]*bl; a[d0+3]=all[s0+3]; } }
-  ctx.putImageData(o,0,0); return cv.toDataURL('image/png'); }
-const IC_MAT=(b,s2)=>({b,m:[.213+.787*s2,.715-.715*s2,.072-.072*s2, .213-.213*s2,.715+.285*s2,.072-.072*s2, .213-.213*s2,.715-.715*s2,.072+.928*s2]});
-const IC_DIM=IC_MAT(.62,.55), IC_ON=IC_MAT(1.4,1.2);   // 與原本 CSS filter: brightness() saturate() 相同
+const IC_MAT=(b,s2,css)=>({b,css,m:[.213+.787*s2,.715-.715*s2,.072-.072*s2, .213-.213*s2,.715+.285*s2,.072-.072*s2, .213-.213*s2,.715-.715*s2,.072+.928*s2]});
+const IC_DIM=IC_MAT(.62,.55,'brightness(0.62) saturate(0.55)'), IC_ON=IC_MAT(1.4,1.2,'brightness(1.4) saturate(1.2)');
+const IC_FADE={...IC_MAT(.62,.55,'brightness(0.62) saturate(0.55) opacity(0.15)'),alpha:.15};   // 搜尋時沒命中的節點   // 與原本 CSS filter 相同
+// 瀏覽器支援 canvas filter 時由繪圖引擎直接套濾鏡（快）；不支援時（較舊的 Safari）改用 JS 逐點計算，結果相同
+const IC_CANVAS_FILTER=(()=>{ try{ const c=document.createElement('canvas'); c.width=c.height=1; const x=c.getContext('2d'); if(!('filter' in x)) return false;
+  x.filter='brightness(0.5)'; x.fillStyle='#fff'; x.fillRect(0,0,1,1); const v=x.getImageData(0,0,1,1).data[0]; return v>100&&v<160; }catch(e){ return false; } })();
+function icSheetFor(v){
+  const P=icPix; if(P.sheets.has(v)) return P.sheets.get(v);
+  const cv=document.createElement('canvas'); cv.width=P.W; cv.height=P.H; const x=cv.getContext('2d');
+  if(IC_CANVAS_FILTER){ x.filter=v.css; x.drawImage(P.img,0,0); }
+  else { x.drawImage(P.img,0,0); const d=x.getImageData(0,0,P.W,P.H), a=d.data, {b,m}=v;
+    const al=v.alpha||1;
+    for(let k=0;k<a.length;k+=4){ const r=a[k]*b,g=a[k+1]*b,bl=a[k+2]*b; a[k]=m[0]*r+m[1]*g+m[2]*bl; a[k+1]=m[3]*r+m[4]*g+m[5]*bl; a[k+2]=m[6]*r+m[7]*g+m[8]*bl; a[k+3]*=al; }
+    x.putImageData(d,0,0); }
+  P.sheets.set(v,cv); return cv;
+}
+function icVariant(i,v){ const P=icPix, x=P.cv.getContext('2d'), c=P.c;
+  x.clearRect(0,0,c,c); x.drawImage(icSheetFor(v),(i%P.cols)*c,Math.floor(i/P.cols)*c,c,c,0,0,c,c); return P.cv.toDataURL('image/png'); }
+/* 主要做法（快）：整張合圖先套好「暗」「亮」兩種濾鏡，各存成一個 blob 網址；每顆圖示用 <svg viewBox> 只露出自己那一格。
+   整張圖只解碼一次，載入約 0.2 秒。若瀏覽器不允許 blob 圖片（例如部分內嵌環境），改用備援：每顆圖示各自一張小圖。 */
+let icMode='sheet', icURL=null;
 function bakeIcons(sh){
-  const job=++icBakeJob, src=sh.src; icCache.clear(); icCacheSrc=src;
+  const job=++icBakeJob, src=sh.src; icCache.clear(); icCacheSrc=src; icPix=null; icPending.clear();
+  if(icURL){ for(const u of Object.values(icURL)) if(u) URL.revokeObjectURL(u); } icURL=null;
+  if(icMode!=='sheet'){ icMode='sheet'; icBoard=null; }
+  ldChip('準備天賦圖示…');
   const img=new Image();
-  img.onload=()=>{
-    if(job!==icBakeJob) return;
-    const c=sh.cell, W=img.naturalWidth, H=img.naturalHeight;
-    let all; try{ const big=document.createElement('canvas'); big.width=W; big.height=H; const bx=big.getContext('2d'); bx.drawImage(img,0,0); all=bx.getImageData(0,0,W,H).data; }
-    catch(e){ return; }   // 讀不到像素（極少數環境）：圖示維持空白圓底
-    icPix={all,W,c,cols:sh.cols,cv:Object.assign(document.createElement('canvas'),{width:c,height:c})};
-    // 先處理盤面用到的，再處理合圖裡其餘格子（編輯器改圖示時也立即可用）；亮版只在節點被點亮時才產生
-    const used=new Set(board.nodes.filter(hasIcon).map(n=>n.icon)), total=Math.floor(W/c)*Math.floor(H/c);
-    const todo=[...used, ...Array.from({length:total},(_,i)=>i).filter(i=>!used.has(i))];
-    const one=i=>{ icCache.set(i,{d:icVariant(i,IC_DIM),l:null}); };
-    let k=0;
-    const step=()=>{ if(job!==icBakeJob) return; const t=performance.now();
-      while(k<todo.length&&performance.now()-t<14) one(todo[k++]);
-      applyIconHrefs(); ldChip(k<used.size?`準備天賦圖示 ${k} / ${used.size}`:'');
-      if(k<todo.length) setTimeout(step,0); };
-    step();
+  img.onload=()=>{ if(job!==icBakeJob) return;
+    icPix={img,W:img.naturalWidth,H:img.naturalHeight,c:sh.cell,cols:sh.cols,sheets:new Map(),cv:Object.assign(document.createElement('canvas'),{width:sh.cell,height:sh.cell})};
+    let cv; try{ cv=icSheetFor(IC_DIM); }catch(e){ ldChip(''); return; }   // 讀不到像素（極少數環境）：圖示維持空白圓底
+    const fallback=()=>{ if(job!==icBakeJob) return; icMode='icon'; icBoard=null; renderIcons(); bakePerIcon(job,sh); };
+    try{ cv.toBlob(bl=>{ if(job!==icBakeJob) return; if(!bl){ fallback(); return; }
+      const u=URL.createObjectURL(bl), t=new Image();
+      t.onload=()=>{ if(job!==icBakeJob){ URL.revokeObjectURL(u); return; } icURL={d:u,l:null}; applyIconHrefs(); ldChip(''); setTimeout(()=>upgradeToPerIcon(job,sh),300); };
+      t.onerror=()=>{ URL.revokeObjectURL(u); fallback(); }; t.src=u; },'image/png'); }
+    catch(e){ fallback(); }
   };
   img.src=src;
 }
-function applyIconHrefs(){
-  for(const [id,e] of icEls){ const n=byId.get(id); const v=n&&icCache.get(n.icon); if(!v) continue;
+const icPending=new Set();
+function extraSheetURL(key,v){   // 亮版（有節點被點亮時）、淡版（搜尋時）：第一次需要時才做
+  if(!icURL||icURL[key]||icPending.has(key)||!icPix) return; icPending.add(key); const job=icBakeJob;
+  try{ icSheetFor(v).toBlob(bl=>{ icPending.delete(key); if(job!==icBakeJob||!bl||!icURL) return; icURL[key]=URL.createObjectURL(bl); applyIconHrefs(); },'image/png'); }catch(e){ icPending.delete(key); }
+}
+// 先用整張合圖快速顯示，之後在背景把每顆圖示做成獨立小圖、全部解碼完成後一次換上：
+// 平移縮放時畫小圖比每格都從大合圖裁切省力（手機上差約 30%），換的時候不會閃。
+function upgradeToPerIcon(job,sh){
+  if(job!==icBakeJob||icMode!=='sheet'||!icPix) return;
+  const used=[...new Set(board.nodes.filter(hasIcon).map(n=>n.icon))]; let k=0;
+  const step=()=>{ if(job!==icBakeJob||icMode!=='sheet') return; const t=performance.now();
+    while(k<used.length&&performance.now()-t<12){ const i=used[k++]; if(!icCache.has(i)) icCache.set(i,{d:icVariant(i,IC_DIM),l:null}); }
+    if(k<used.length){ setTimeout(step,0); return; }
+    // 全部預先解碼，再一次換上
+    Promise.all(used.map(i=>{ const im=new Image(); im.src=icCache.get(i).d; return (im.decode?im.decode():Promise.resolve()).catch(()=>{}); })).then(()=>{
+      if(job!==icBakeJob||icMode!=='sheet') return;
+      icMode='icon'; icBoard=null; renderIcons();
+      if(icURL){ const old=icURL; setTimeout(()=>{ for(const u of Object.values(old)) if(u) URL.revokeObjectURL(u); },2000); } icURL=null;
+      // 合圖裡其餘沒用到的格子（編輯器換圖示時用）
+      const rest=[], total=Math.floor(icPix.W/sh.cell)*Math.floor(icPix.H/sh.cell); for(let i=0;i<total;i++) if(!icCache.has(i)) rest.push(i);
+      let r=0; const more=()=>{ if(job!==icBakeJob) return; const t=performance.now(); while(r<rest.length&&performance.now()-t<12){ const i=rest[r++]; icCache.set(i,{d:icVariant(i,IC_DIM),l:null}); } if(r<rest.length) setTimeout(more,30); };
+      setTimeout(more,500);
+    });
+  };
+  step();
+}
+// 備援：每顆圖示各自產生一張小圖（畫面中央附近的先做）
+function bakePerIcon(job,sh){
+  const used=[...new Set(board.nodes.filter(hasIcon).map(n=>n.icon))], cx=vb.x+vb.w/2, cy=vb.y+vb.h/2, dist=new Map();
+  for(const n of board.nodes) if(hasIcon(n)){ const d=Math.hypot(n.x-cx,n.y-cy); if(!dist.has(n.icon)||d<dist.get(n.icon)) dist.set(n.icon,d); }
+  const usedSet=new Set(used), total=Math.floor(icPix.W/sh.cell)*Math.floor(icPix.H/sh.cell);
+  const todo=[...used.sort((a,b)=>dist.get(a)-dist.get(b)), ...Array.from({length:total},(_,i)=>i).filter(i=>!usedSet.has(i))];
+  let k=0;
+  const step=()=>{ if(job!==icBakeJob) return; const t=performance.now(), fresh=new Set();
+    while(k<todo.length&&performance.now()-t<24){ const i=todo[k++]; icCache.set(i,{d:icVariant(i,IC_DIM),l:null}); fresh.add(i); }
+    applyIconHrefs(fresh); ldChip(k<used.length?`準備天賦圖示 ${k} / ${used.length}`:'');
+    if(k<todo.length) setTimeout(step,0); };
+  step();
+}
+const iconsReady=()=>!board||!board.iconSheet||(icMode==='sheet'?!!icURL:board.nodes.filter(hasIcon).every(n=>icCache.has(n.icon)));
+const iconsFinal=()=>!board||!board.iconSheet||(icMode==='icon'&&board.nodes.filter(hasIcon).every(n=>icCache.has(n.icon)));
+function applyIconHrefs(only){
+  if(icMode==='sheet'){
+    if(!icURL) return; let needL=false, needF=false;
+    for(const [id,e] of icEls){ const st=icState.get(id)||'', dim=st.includes(' dim'), on=st.includes(' on'), im=e.firstChild; if(!im) continue;
+      if(dim&&!icURL.f) needF=true; if(on&&!dim&&!icURL.l) needL=true;
+      const want=dim&&icURL.f?icURL.f:on&&icURL.l?icURL.l:icURL.d;
+      if(im.getAttribute('href')!==want) im.setAttribute('href',want);
+      const faded=want===icURL.f; if(faded!==im.hasAttribute('data-faded')) faded?im.setAttribute('data-faded',''):im.removeAttribute('data-faded'); }
+    if(needL) extraSheetURL('l',IC_ON); if(needF) extraSheetURL('f',IC_FADE); return;
+  }
+  for(const [id,e] of icEls){ const n=byId.get(id); if(!n||(only&&!only.has(n.icon))) continue; const v=icCache.get(n.icon); if(!v) continue;
     const on=(icState.get(id)||'').includes(' on'); if(on&&!v.l&&icPix) v.l=icVariant(n.icon,IC_ON);
     const want=on&&v.l?v.l:v.d; if(e.getAttribute('href')!==want) e.setAttribute('href',want); }
 }
@@ -559,14 +620,16 @@ function renderIcons(){
   const sh=board.iconSheet;
   if(!sh){ if(icBoard){ $('gI').innerHTML=''; icBoard=null; icEls.clear(); icTint.clear(); } return; }
   if(icCacheSrc!==sh.src){ icBoard=null; bakeIcons(sh); }
-  const icSig=board.nodes.reduce((a,n)=>a+(hasIcon(n)?1:0)+(C(n).choice?2:0),0)+'|'+board.nodes.length;
+  const icSig=icMode+'|'+board.nodes.reduce((a,n)=>a+(hasIcon(n)?1+n.icon*7:0)+(C(n).choice?2:0),0)+'|'+board.nodes.length;
   if(icBoard!==board||icVer!==geomVer||icSigLast!==icSig){
     icVer=geomVer; icSigLast=icSig;
     let h='';
     for(const n of board.nodes){ if(!hasIcon(n)) continue; const r=radius(n);
-      h+=`<circle class="icbg" cx="${n.x}" cy="${n.y}" r="${r}"/><image class="ic" data-i="${n.id}" x="${n.x-r}" y="${n.y-r}" width="${2*r}" height="${2*r}"/>`;
+      h+=`<circle class="icbg" cx="${n.x}" cy="${n.y}" r="${r}"/>`+(icMode==='sheet'
+        ? `<svg class="ic" data-i="${n.id}" x="${n.x-r}" y="${n.y-r}" width="${2*r}" height="${2*r}" viewBox="${(n.icon%sh.cols)*sh.cell} ${Math.floor(n.icon/sh.cols)*sh.cell} ${sh.cell} ${sh.cell}"><image width="${sh.w}" height="${sh.h}"/></svg>`
+        : `<image class="ic" data-i="${n.id}" x="${n.x-r}" y="${n.y-r}" width="${2*r}" height="${2*r}"/>`);
       if(C(n).choice) h+=`<circle class="ictint" data-t="${n.id}" cx="${n.x}" cy="${n.y}" r="${r}"/>`; }
-    $('gI').innerHTML=h; icEls=new Map([...$('gI').querySelectorAll('image.ic')].map(e=>[e.dataset.i,e]));
+    $('gI').innerHTML=h; icEls=new Map([...$('gI').querySelectorAll('.ic')].map(e=>[e.dataset.i,e]));
     icTint=new Map([...$('gI').querySelectorAll('.ictint')].map(e=>[e.dataset.t,e])); icBoard=board;
     icBg=new Map([...$('gI').querySelectorAll('.icbg')].map((e,k)=>[e.nextElementSibling.dataset.i,e]));
   } else if(mode==='edit'){
@@ -1721,7 +1784,7 @@ async function runBench(){
   const R={};
   try{
     R.ready=Math.round(await benchWait(()=>typeof board!=='undefined'&&board&&byId&&byId.size>0));
-    R.icons=Math.round(await benchWait(()=>board.nodes.filter(hasIcon).every(n=>icCache.has(n.icon))));
+    R.icons=Math.round(await benchWait(iconsReady)); R.iconsHQ=Math.round(await benchWait(iconsFinal).catch(()=>NaN));
     benchRunning=true;
     const saved={alloc:new Set(alloc),picks:new Map(picks),vb:{...vb},sq:$('search').value};
     await new Promise(r=>setTimeout(r,300));
@@ -1754,7 +1817,7 @@ async function runBench(){
   const lines=[
     `瀏覽器：${navigator.userAgent}`,
     `畫面：${innerWidth}×${innerHeight}，像素比 ${devicePixelRatio}，節點 ${board?board.nodes.length:'?'}`,
-    `載入：可操作 ${R.ready??'?'} ms，圖示完成 ${R.icons??'?'} ms${nav?`，DOM 完成 ${Math.round(nav.domContentLoadedEventEnd)} ms`:''}`,
+    `載入：可操作 ${R.ready??'?'} ms，圖示顯示 ${R.icons??'?'} ms，圖示最佳化完成 ${R.iconsHQ??'?'} ms${nav?`，DOM 完成 ${Math.round(nav.domContentLoadedEventEnd)} ms`:''}`,
     R.panAll?`平移（全圖）：${R.panAll.fps} fps（${rate(R.panAll.fps)}），95% 畫格 ${R.panAll.p95} ms，最慢 ${R.panAll.worst} ms`:'',
     R.zoom?`縮放：${R.zoom.fps} fps（${rate(R.zoom.fps)}），95% 畫格 ${R.zoom.p95} ms，最慢 ${R.zoom.worst} ms`:'',
     R.panNear?`平移（放大時）：${R.panNear.fps} fps（${rate(R.panNear.fps)}）`:'',

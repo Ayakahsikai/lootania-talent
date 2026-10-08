@@ -96,6 +96,22 @@ textarea{width:100%;box-sizing:border-box;height:90px;background:#0c0c0e;color:v
 .legend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 10px;font-size:12px;color:var(--muted)}
 .legend span{display:flex;align-items:center;gap:6px}
 .legend i{width:10px;height:10px;border-radius:50%;display:inline-block;border:1px solid var(--node-ring)}
+.loading{position:absolute;inset:0;z-index:25;display:grid;place-items:center;background:rgba(10,10,12,.72);backdrop-filter:blur(2px);transition:opacity .25s}
+.loading.out{opacity:0;pointer-events:none}
+html.is-loading .panel,html.is-loading .hud{pointer-events:none!important;opacity:.55}
+.ld-box{min-width:240px;max-width:min(360px,86vw);padding:18px 20px;border:1px solid var(--line);border-radius:12px;background:#17171b;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.ld-spin{width:28px;height:28px;margin:0 auto 12px;border-radius:50%;border:3px solid #2e2e36;border-top-color:var(--accent);animation:ldspin .8s linear infinite}
+@keyframes ldspin{to{transform:rotate(360deg)}}
+.ld-step{font-size:14px;color:var(--fg)}
+.ld-bar{height:4px;margin:12px 0 8px;background:#26262c;border-radius:2px;overflow:hidden;position:relative}
+.ld-bar i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--accent);transition:width .15s}
+.ld-bar.ind i{width:35%;animation:ldind 1.1s ease-in-out infinite}
+@keyframes ldind{0%{left:-35%}100%{left:100%}}
+.ld-sub{font:12px var(--f-mono);color:var(--muted);min-height:1.2em;overflow-wrap:anywhere}
+.ld-chip{position:absolute;left:50%;bottom:56px;transform:translateX(-50%);z-index:6;display:flex;align-items:center;gap:8px;font:12px var(--f-mono);color:var(--muted);background:rgba(23,23,27,.92);border:1px solid var(--line);border-radius:999px;padding:4px 12px;pointer-events:none}
+.ld-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:ldpulse 1s ease-in-out infinite}
+@keyframes ldpulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.ld-spin,.ld-dot,.ld-bar.ind i{animation:none}}
 .toast{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);background:#26262c;border:1px solid var(--line);padding:6px 12px;border-radius:6px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
 /* svg classes */
@@ -269,6 +285,13 @@ button:disabled{opacity:.45;cursor:not-allowed}
       <button id="zFit" aria-label="重置視角">⤢</button>
     </div>
     <div class="toast" id="toast"></div>
+    <div class="loading" id="loading" role="status" aria-live="polite">
+      <div class="ld-box"><div class="ld-spin" aria-hidden="true"></div>
+        <div class="ld-step" id="ldStep">載入中…</div>
+        <div class="ld-bar"><i id="ldBar"></i></div>
+        <div class="ld-sub" id="ldSub"></div></div>
+    </div>
+    <div class="ld-chip" id="ldChip" role="status" aria-live="polite" hidden><i class="ld-dot" aria-hidden="true"></i><span id="ldChipT"></span></div>
     <div class="tip" id="tip" hidden></div>
     <div class="picker confirm" id="confirm" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" hidden>
       <div class="pk-title" id="confirmTitle">確認</div>
@@ -446,7 +469,16 @@ button:disabled{opacity:.45;cursor:not-allowed}
 
 <script>
 const PLAYER = true;
-document.documentElement.classList.toggle('player',PLAYER);
+/* ---------- 載入狀態：顯示目前在讀取什麼 ---------- */
+function ldStep(step,sub,pct){ const L=document.getElementById('loading'); if(!L) return; L.hidden=false; L.classList.remove('out'); document.documentElement.classList.add('is-loading');
+  document.getElementById('ldStep').textContent=step; document.getElementById('ldSub').textContent=sub||'';
+  const bar=document.getElementById('ldBar').parentNode; if(pct==null){ bar.classList.add('ind'); document.getElementById('ldBar').style.width=''; }
+  else { bar.classList.remove('ind'); document.getElementById('ldBar').style.width=Math.max(2,Math.min(100,pct))+'%'; } }
+function ldHide(){ document.documentElement.classList.remove('is-loading'); const L=document.getElementById('loading'); if(!L||L.hidden) return; L.classList.add('out'); setTimeout(()=>{ if(L.classList.contains('out')) L.hidden=true; },260); }
+const ldTick=()=>new Promise(r=>requestAnimationFrame(()=>setTimeout(r,0)));   // 讓畫面先更新再做耗時工作
+function ldChip(text){ const c=document.getElementById('ldChip'); if(!c) return; if(text){ document.getElementById('ldChipT').textContent=text; c.hidden=false; } else c.hidden=true; }
+const fmtKB=n=>n>=1048576?(n/1048576).toFixed(1)+' MB':Math.round(n/1024)+' KB';
+document.documentElement.classList.toggle('player',PLAYER); document.documentElement.classList.add('is-loading');
 let BOARD = null;
 const $ = id => document.getElementById(id);
 const NS = 'http://www.w3.org/2000/svg';
@@ -512,7 +544,8 @@ function bakeIcons(sh){
     let k=0;
     const step=()=>{ if(job!==icBakeJob) return; const t=performance.now();
       while(k<todo.length&&performance.now()-t<14) one(todo[k++]);
-      applyIconHrefs(); if(k<todo.length) setTimeout(step,0); };
+      applyIconHrefs(); ldChip(k<used.size?`準備天賦圖示 ${k} / ${used.size}`:'');
+      if(k<todo.length) setTimeout(step,0); };
     step();
   };
   img.src=src;
@@ -1383,7 +1416,20 @@ function renderVerSel(){
   $('verSel').innerHTML=MANIFEST.boards.map(b=>`<option value="${esc(b.version)}">${esc(b.version)}${b.version===latestVer()?'（最新）':''}</option>`).join('');
   $('verSel').value=board.version||'';
 }
-async function fetchBoard(entry){ const r=await fetch(MANIFEST.base+entry.file,{cache:'no-cache'}); if(!r.ok) throw new Error(`${entry.file}：HTTP ${r.status}`); return r.json(); }
+async function fetchBoard(entry,label){
+  const name=label||`下載天賦盤 ${entry.version}`; ldStep(name,entry.file);
+  const r=await fetch(MANIFEST.base+entry.file,{cache:'no-cache'}); if(!r.ok) throw new Error(`${entry.file}：HTTP ${r.status}`);
+  // 有壓縮時 Content-Length 是壓縮後大小，無法換算百分比，只顯示已下載量
+  const total=+r.headers.get('content-length')||0, enc=r.headers.get('content-encoding');
+  let text;
+  if(r.body&&r.body.getReader){ const rd=r.body.getReader(), dec=new TextDecoder(); let got=0, parts=[], last=0;
+    for(;;){ const {done,value}=await rd.read(); if(done) break; got+=value.length; parts.push(dec.decode(value,{stream:true}));
+      const now=performance.now(); if(now-last>80){ last=now; ldStep(name,`${entry.file} · ${fmtKB(got)}${total&&!enc?' / '+fmtKB(total):''}`,total&&!enc?got/total*100:null); } }
+    parts.push(dec.decode()); text=parts.join(''); }
+  else text=await r.text();
+  ldStep('解析天賦盤資料',`${entry.file} · ${fmtKB(text.length)}`,null); await ldTick();
+  try{ return JSON.parse(text); }catch(e){ throw new Error(`${entry.file} 不是正確的 JSON：${e.message}`); }
+}
 // keep the nodes that still exist and are still connected to the chosen start
 function carryBuild(prevAlloc,prevPicks){
   const st=board.startIds.find(x=>prevAlloc.includes(x)); alloc=new Set(); picks=new Map();
@@ -1405,7 +1451,8 @@ function useBoard(data,file,keep){
 }
 async function switchVersion(v,keep){
   const e=verEntry(v); if(!e) throw new Error(`找不到版本 ${v}`);
-  const data=await fetchBoard(e); return useBoard(data,e.file,keep);
+  try{ const data=await fetchBoard(e,`切換到 ${e.version}`); ldStep('建立盤面',`${(data.nodes||[]).length} 個節點`,null); await ldTick(); return useBoard(data,e.file,keep); }
+  finally{ ldHide(); }
 }
 $('verSel').onchange=async ev=>{
   const v=ev.target.value; if(v===board.version) return;
@@ -1715,25 +1762,28 @@ async function runBench(){
     R.error?`錯誤：${R.error}`:''].filter(Boolean);
   const txt=lines.join('\n');
   box.innerHTML=`<div class="pk-title">效能測試結果</div><pre style="white-space:pre-wrap;font:12px/1.6 var(--f-mono);margin:8px 0;max-height:50vh;overflow:auto">${esc(txt)}</pre>
-    <div class="row"><button class="primary" id="bCopy">複製結果</button><button id="bClose">關閉</button></div>`;
-  $('bClose').onclick=()=>box.remove();
+    <div class="row"><button class="primary" id="bCopy">複製結果</button><button id="bAgain">重新測試</button><button id="bClose">關閉</button></div>`;
+  $('bClose').onclick=()=>box.remove(); $('bAgain').onclick=()=>{ box.remove(); runBench(); };
   $('bCopy').onclick=async()=>{ try{ await navigator.clipboard.writeText(txt); toast('已複製測試結果'); }catch(e){ const ta=document.createElement('textarea'); ta.value=txt; box.appendChild(ta); ta.select(); toast('請手動複製下方文字'); } };
 }
 if(BENCH) setTimeout(runBench,0);
 
 async function boot(){
-  const fail=msg=>document.getElementById('stage').insertAdjacentHTML('beforeend',`<div class="picker" style="display:block"><div class="pk-title">無法載入天賦盤資料</div><div class="pk-prompt">${String(msg).replace(/[<>&]/g,'')}\n請確認 boards 資料夾和 index.html 放在一起，並透過網站（GitHub Pages 或本機伺服器）開啟，不要直接雙擊檔案。</div></div>`);
+  const fail=msg=>{ ldHide(); document.getElementById('stage').insertAdjacentHTML('beforeend',`<div class="picker" style="display:block"><div class="pk-title">無法載入天賦盤資料</div><div class="pk-prompt">${String(msg).replace(/[<>&]/g,'')}\n請確認 boards 資料夾和 index.html 放在一起，並透過網站（GitHub Pages 或本機伺服器）開啟，不要直接雙擊檔案。</div></div>`); };
+  ldStep('讀取版本清單','boards/index.json',null);
   try{ const r=await fetch('boards/index.json',{cache:'no-cache'}); if(!r.ok) throw new Error('boards/index.json：HTTP '+r.status);
     MANIFEST=await r.json(); MANIFEST.base='boards/'; if(!MANIFEST.boards||!MANIFEST.boards.length) throw new Error('boards/index.json 裡沒有任何版本'); }
   catch(e){ fail(e.message||e); return; }
   let s=null; try{ s=JSON.parse(localStorage.getItem(LS_B)||'null'); }catch(e){}
   const v=(s&&s.boardVersion&&verEntry(s.boardVersion))?s.boardVersion:latestVer();
-  try{ useBoard(await fetchBoard(verEntry(v)),verEntry(v).file,false); }catch(e){ fail(e.message||e); return; }
+  try{ const data=await fetchBoard(verEntry(v)); ldStep('建立盤面',`${v} · ${(data.nodes||[]).length} 個節點`,null); await ldTick(); useBoard(data,verEntry(v).file,false); }catch(e){ fail(e.message||e); return; }
+  if(s&&s.boardVersion===board.version) ldStep('讀取上次的流派',`${(s.alloc||[]).length} 個節點`,null);
   setTool('select'); setMode('play');
   if(s&&s.boardVersion===board.version){ try{ applyBuild(s,true); }catch(e){} }
-  if(await loadShareFromHash()) { render(); updFileState(); return; }
+  if(location.hash.slice(1).startsWith('LT1')) ldStep('讀取分享碼','',null);
+  if(await loadShareFromHash()) { render(); ldHide(); updFileState(); return; }
+  render(); ldHide(); updFileState();
   offerLatest('boot');
-  render(); updFileState();
 }
 boot();
 </script>

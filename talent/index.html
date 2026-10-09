@@ -73,6 +73,36 @@ input[type=range]{flex:1;accent-color:var(--accent)}
 .st-head i{margin-left:auto;font-style:normal;transition:transform .15s}
 .hud-stage.closed .st-head{padding-bottom:0}.hud-stage.closed .st-head i{transform:rotate(-90deg)}.hud-stage.closed .st-body{display:none}
 .hud-stage .st-list{max-height:min(40vh,320px);overflow:auto}
+.note-btn{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:8px 10px;border-radius:8px;background:#121216}
+.note-btn span:first-child{font-weight:500}
+.note-btn i{margin-left:auto;font-style:normal;color:var(--muted);font-size:12px}
+.note-btn:hover i{color:var(--fg)}
+.note-flag{font:12px var(--f-ui);color:var(--accent)}
+.note-flag.none{color:var(--muted)}
+.nmodal{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.62);backdrop-filter:blur(2px)}
+.nm-box{width:min(860px,100%);height:min(86vh,920px);display:flex;flex-direction:column;background:#17171b;border:1px solid var(--line);border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.nm-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.nm-head b{font-size:15px}
+.nm-x{margin-left:auto;border:0;background:transparent;font-size:16px;color:var(--muted);padding:2px 6px}
+.nm-x:hover{color:var(--fg)}
+.nm-body{flex:1;min-height:0;display:flex;padding:14px 16px}
+.note-view{flex:1;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14.5px;line-height:1.85;padding:4px 2px}
+.note-view.empty{color:var(--muted)}
+.note-view a{color:var(--accent)}
+.nm-tabs{display:flex;gap:6px;padding:8px 16px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:thin}
+.nm-tabs button{flex:none;padding:4px 10px;border-radius:999px;font-size:12.5px;background:#121216;color:var(--muted);white-space:nowrap}
+.nm-tabs button.on{background:var(--accent);color:#1a1408;border-color:var(--accent);font-weight:600}
+.nm-tabs button.has::after{content:"";display:inline-block;width:6px;height:6px;margin-left:6px;border-radius:50%;background:var(--accent);vertical-align:middle}
+.nm-tabs button.on.has::after{background:#1a1408}
+.nm-tabs button.cur:not(.on){color:var(--fg)}
+.note-help{white-space:normal;line-height:1.7}.note-help p{margin:0 0 8px}.note-help ul{margin:0;padding-left:18px;font-size:13px}.note-help li{margin:3px 0}.note-help b{color:var(--fg);font-weight:600}
+.note-help kbd{font:11px var(--f-mono);padding:1px 5px;border:1px solid var(--line);border-radius:4px;color:var(--fg)}
+#noteText{flex:1;height:auto;width:100%;resize:none;font:14px/1.75 var(--f-ui);padding:10px 12px}
+.nm-foot{display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--line)}
+.nm-foot>span:not(.note-count){display:flex;gap:8px;margin-left:auto}
+.note-count{font:11px var(--f-mono);color:var(--muted)}
+@media (max-width:560px){.nmodal{padding:0}.nm-box{height:100%;border-radius:0}}
+.st-nt{color:var(--accent);font-weight:400;font-size:11px}
 .st-add{display:flex;gap:6px}.st-add input{flex:1}.st-add button{white-space:nowrap}
 .st-list{display:flex;flex-direction:column;gap:4px;margin-top:8px}.st-list:empty{display:none}
 .st-it{display:flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:6px;padding:2px 2px 2px 0;background:#121216}
@@ -325,6 +355,10 @@ svg.ic.dim>image[data-faded]{opacity:1}
       <button id="mEdit" aria-pressed="false">編輯盤面</button>
     </div>
 
+    <section class="pl-only" id="noteSec">
+      <button class="note-btn" id="noteOpenBtn" aria-haspopup="dialog"><span>備註</span><span class="note-flag" id="noteFlag"></span><i aria-hidden="true">開啟 ›</i></button>
+    </section>
+
     <section id="playPanel">
       <h2>投點</h2>
       <div class="row" style="flex-direction:column;align-items:stretch;gap:8px">
@@ -444,7 +478,7 @@ svg.ic.dim>image[data-faded]{opacity:1}
       <textarea id="bBox" hidden aria-label="配點內容" style="margin-top:8px"></textarea>
       <div class="row" style="margin-top:10px"><button id="shCopy">複製分享碼</button><button id="shLink" hidden>複製分享連結</button></div>
       <div class="sh-in" style="margin-top:8px">
-        <textarea id="shIn" rows="2" placeholder="貼上分享碼（LT1 開頭）" aria-label="貼上分享碼"></textarea>
+        <textarea id="shIn" rows="2" placeholder="貼上分享碼（LT1／LT2 開頭）" aria-label="貼上分享碼"></textarea>
         <button id="shLoad">讀取分享碼</button>
       </div>
       <p class="note" style="margin-top:6px">目前的流派會自動記在這個瀏覽器；儲存的檔案會記錄天賦版本，讀取時自動切換到該版本。</p>
@@ -466,6 +500,22 @@ svg.ic.dim>image[data-faded]{opacity:1}
       <div class="row" style="margin-top:8px"><button id="resetBoard">還原為內嵌盤面</button></div>
     </section>
   </aside>
+</div>
+
+<div class="nmodal" id="noteModal" role="dialog" aria-modal="true" aria-labelledby="noteTitle" hidden>
+  <div class="nm-box">
+    <div class="nm-head"><b id="noteTitle">備註</b><span class="note-flag" id="noteFlag2"></span><button class="nm-x" id="noteClose" aria-label="關閉">✕</button></div>
+    <div class="nm-tabs" id="noteTabs" role="tablist" aria-label="備註對象" hidden></div>
+    <div class="nm-body">
+      <div id="noteView" class="note-view"></div>
+      <textarea id="noteText" maxlength="2000" placeholder="寫下這個流派的說明，例如：配點順序、裝備需求、技能搭配、注意事項…（可貼網址，會變成連結）" aria-label="備註內容" hidden></textarea>
+    </div>
+    <div class="nm-foot">
+      <span class="note-count" id="noteCount"></span>
+      <span id="noteViewBtns"><button id="noteEditBtn">編輯</button><button class="primary" id="noteDone">關閉</button></span>
+      <span id="noteEditBtns" hidden><button id="noteCancel">取消</button><button class="primary" id="noteSave">儲存</button></span>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -1136,6 +1186,7 @@ function setTool(t){tool=t;$('brushRow').hidden=t!=='paint';linkFrom=null;docume
 document.querySelectorAll('#tools button').forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
 $('undo').onclick=undo;
 document.addEventListener('keydown',ev=>{
+  if($('noteModal')&&!$('noteModal').hidden) return;   // 備註視窗開著時不處理盤面快捷鍵
   if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='s'){ev.preventDefault();if(PLAYER) saveBuild(); else saveBoard(false);return;}
   const typing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
   if(ev.key==='Escape'&&!$('confirm').hidden){ $('confirmNo').click(); return; }
@@ -1467,7 +1518,7 @@ $('resetBoard').onclick=()=>{
 };
 
 /* ---------- player build save/load ---------- */
-function buildData(){return {type:'lootania-build',boardVersion:board.version||'',boardFile:CUR_FILE||undefined,start:board.startIds.find(x=>alloc.has(x))||null,alloc:[...alloc],picks:[...picks],lastPick,autoPick3:$('autoPick').checked,stages:stages.map(x=>({name:x.name,alloc:x.alloc,picks:x.picks})),condMode,conds:[...activeConds],savedAt:new Date().toISOString()};}
+function buildData(){return {type:'lootania-build',boardVersion:board.version||'',boardFile:CUR_FILE||undefined,start:board.startIds.find(x=>alloc.has(x))||null,alloc:[...alloc],picks:[...picks],lastPick,autoPick3:$('autoPick').checked,stages:stages.map(x=>({name:x.name,alloc:x.alloc,picks:x.picks,note:x.note||undefined})),condMode,conds:[...activeConds],note:buildNote||undefined,savedAt:new Date().toISOString()};}
 /* ---------- board versions (folder + manifest; used by the website build) ---------- */
 let MANIFEST=null, CUR_FILE=null;
 function verEntry(v){return MANIFEST&&MANIFEST.boards.find(b=>b.version===v);}
@@ -1531,8 +1582,9 @@ async function openBuild(s){
     else { applyBuild(s); showAlert('找不到對應版本',`這份流派是在 <b>${esc(v)}</b> 建立，網站上已沒有這個版本，已改用目前的 <b>${esc(board.version||'')}</b> 讀取，部分天賦可能無法對應。`); return; }
   }
   applyBuild(s,true);
+  const nn=(buildNote?1:0)+stages.filter(t=>t.note).length;   // 不自動開啟備註，只提示
   if(MANIFEST&&v&&!isLatest(v)) offerLatest('build');
-  else toast(`已讀取流派：${v||board.version||''}，${spent()} 點`);
+  else toast(`已讀取流派：${v||board.version||''}，${spent()} 點${nn?`。有 ${nn} 則備註，按「備註」查看`:''}`);
 }
 function applyBuild(s,quiet){
   if(!s||!Array.isArray(s.alloc)) throw new Error('不是配點檔案');
@@ -1540,6 +1592,7 @@ function applyBuild(s,quiet){
   { const st=s.alloc.find(id=>isStart(id)&&byId.has(id)); alloc=new Set(s.alloc.filter(id=>byId.has(id)&&(!isStart(id)||id===st))); } picks=new Map((s.picks||[]).filter(([id])=>alloc.has(id)));
   lastPick=s.lastPick||{}; $('autoPick').checked=s.autoPick3===true; pickQueue=[]; pendingBatch=null; $('picker').hidden=true;
   stages=cleanStages(s.stages); stEditing=null;
+  buildNote=typeof s.note==='string'?s.note.slice(0,NOTE_MAX):''; if(noteEditing||!$('noteModal').hidden){ $('noteModal').hidden=true; noteEditing=false; } renderNote();
   condMode=s.condMode===true; activeConds=new Set(Array.isArray(s.conds)?s.conds.map(String).slice(0,200):[]);
   render();
   const warn=(s.boardVersion&&s.boardVersion!==(board.version||''))?`（此配點是在 ${s.boardVersion} 建立，目前是 ${board.version||'未標版本'}）`:'';
@@ -1586,21 +1639,82 @@ $('clsList').addEventListener('change',e=>{ const row=e.target.closest('.cls-row
   if(e.target.classList.contains('cls-cat')) setCls(stat,{cat:e.target.value||null});
   else if(e.target.classList.contains('cls-cd')){ const c=parseConds(e.target.value); setCls(stat,{conds:c}); toast(c===null?'已改回自動判斷':c.length?`條件：${condTxt(c)}`:'設為無條件'); } });
 
+/* ---------- 流派備註：跟著流派檔案、分享碼一起保存；用大視窗顯示與編輯 ---------- */
+var NOTE_MAX=2000, buildNote='', noteEditing=false, noteLastFocus=null, noteTab=null;   // noteTab：null＝總備註，否則為階段物件
+const noteCtx=()=>stages.find(t=>stSig(t)===curSig())||null;   // 目前配點對應的階段
+const noteGet=t=>t?(t.note||''):buildNote;
+const noteTabOk=()=>{ if(noteTab&&!stages.includes(noteTab)) noteTab=null; return noteTab; };
+function noteTotal(){ return (buildNote?1:0)+stages.filter(t=>t.note).length; }
+function linkify(t){ return esc(t).replace(/https?:\/\/[^\s<]+/g,u=>`<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`); }
+var NOTE_HELP='<div class="note-help"><p>尚未填寫備註，按「編輯」開始寫。</p><ul>'+
+  '<li>按「<b>編輯</b>」修改內容，最多 '+NOTE_MAX+' 字，可換行。</li>'+
+  '<li>按「<b>儲存</b>」或 <kbd>Ctrl</kbd>+<kbd>Enter</kbd> 儲存。</li>'+
+  '<li>改過但沒存就按「<b>取消</b>」或 <kbd>Esc</kbd>，會先詢問是否放棄修改。</li>'+
+  '<li>編輯中點視窗外不會關閉；閱讀時按 <kbd>Esc</kbd> 或點視窗外即可關閉。</li>'+
+  '<li>內容中的網址會自動變成可點的連結。</li>'+
+  '<li>有存階段時，上方可切換「總備註」與各階段的備註；切換到某個階段後開啟備註，會直接顯示該階段的備註。</li>'+
+  '<li>備註會跟著流派檔案與分享碼一起保存，對方讀取後可按「備註」查看。</li></ul></div>';
+function renderNote(){
+  if(!$('noteOpenBtn')||NOTE_HELP===undefined) return;
+  // 側欄按鈕：顯示目前階段的備註；沒有的話顯示總備註／總數
+  const ctx=noteCtx(), cn=noteGet(ctx), tot=noteTotal();
+  const f=ctx&&cn?`${ctx.name} · ${cn.length} 字`:buildNote?`${buildNote.length} 字`+(tot>1?` · 共 ${tot} 則`:''):tot?`共 ${tot} 則`:'尚未填寫';
+  $('noteFlag').textContent=f; $('noteFlag').classList.toggle('none',!tot);
+  const tab=noteTabOk(), cur=noteGet(tab);
+  $('noteFlag2').textContent=(tab?tab.name+' · ':'')+(cur?`${cur.length} 字`:'尚未填寫'); $('noteFlag2').classList.toggle('none',!cur);
+  const tb=$('noteTabs'); tb.hidden=!stages.length;
+  if(stages.length) tb.innerHTML=[null,...stages].map((t,i)=>`<button role="tab" data-i="${i-1}" aria-selected="${t===tab}" class="${t===tab?'on':''}${noteGet(t)?' has':''}${t&&t===ctx?' cur':''}"${t&&t===ctx?' title="目前配點"':''}>${t?esc(t.name):'總備註'}</button>`).join('');
+  const v=$('noteView'); v.classList.toggle('empty',!cur); v.innerHTML=cur?linkify(cur):NOTE_HELP.replace('尚未填寫備註',tab?`「${esc(tab.name)}」尚未填寫備註`:'尚未填寫總備註');
+  $('noteEditBtn').textContent=cur?'編輯':'新增備註';
+  $('noteView').hidden=noteEditing; $('noteText').hidden=!noteEditing; $('noteViewBtns').hidden=noteEditing; $('noteEditBtns').hidden=!noteEditing;
+  $('noteCount').textContent=noteEditing?`${$('noteText').value.length} / ${NOTE_MAX}　Ctrl+Enter 儲存 · Esc 取消`:'';
+}
+function openNote(edit){
+  if($('noteModal').hidden) noteLastFocus=document.activeElement;
+  if($('noteModal').hidden) noteTab=noteCtx();   // 開啟時：有對應階段就顯示該階段
+  $('noteModal').hidden=false; noteEditing=!!edit;
+  if(edit) $('noteText').value=noteGet(noteTabOk());
+  renderNote();
+  if(edit){ const t=$('noteText'); t.focus(); t.setSelectionRange(t.value.length,t.value.length); } else $('noteDone').focus();
+}
+function closeNote(){ $('noteModal').hidden=true; noteEditing=false; renderNote(); if(noteLastFocus&&noteLastFocus.focus) noteLastFocus.focus(); }
+const noteDirty=()=>noteEditing&&$('noteText').value.replace(/\s+$/,'')!==noteGet(noteTabOk());
+function noteSave(){ const v=$('noteText').value.replace(/\s+$/,'').slice(0,NOTE_MAX), t=noteTabOk(); if(v!==noteGet(t)){ if(t){ if(v) t.note=v; else delete t.note; } else buildNote=v; scheduleSave(); const w=t?`「${t.name}」的備註`:'總備註'; toast(v?`已儲存${w}`:`已清除${w}`); if(t) renderStages(true); } noteEditing=false; renderNote(); $('noteDone').focus(); }
+function noteCancel(){ if(noteDirty()&&!confirm('放棄這次的修改？')) return false; noteEditing=false; renderNote(); $('noteDone').focus(); return true; }
+$('noteOpenBtn').onclick=()=>openNote(false);
+$('noteEditBtn').onclick=()=>openNote(true);
+$('noteDone').onclick=closeNote;
+$('noteSave').onclick=noteSave;
+$('noteCancel').onclick=noteCancel;
+$('noteClose').onclick=()=>{ if(noteEditing&&!noteCancel()) return; closeNote(); };
+$('noteText').addEventListener('input',renderNote);
+$('noteTabs').addEventListener('click',e=>{ const b=e.target.closest('button[data-i]'); if(!b) return; const i=+b.dataset.i, t=i<0?null:stages[i];
+  if(t===noteTabOk()) return; if(noteEditing&&!noteCancel()) return; noteTab=t; renderNote(); });
+// 點視窗外：閱讀時直接關閉；編輯中不關，避免誤觸丟失內容
+$('noteModal').addEventListener('pointerdown',e=>{ if(e.target===$('noteModal')&&!noteEditing) closeNote(); });
+document.addEventListener('keydown',e=>{ if($('noteModal').hidden) return;
+  if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); if(noteEditing) noteCancel(); else closeNote(); }
+  else if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)&&noteEditing){ e.preventDefault(); noteSave(); }
+  else if(e.key==='Tab'){ const f=[...$('noteModal').querySelectorAll('button,textarea,a[href]')].filter(x=>!x.closest('[hidden]')&&x.offsetParent!==null); if(!f.length) return;
+    const a=f[0], z=f[f.length-1]; if(e.shiftKey&&document.activeElement===a){ e.preventDefault(); z.focus(); } else if(!e.shiftKey&&document.activeElement===z){ e.preventDefault(); a.focus(); } } },true);
+// 初次顯示由 render() → renderStages() → renderNote() 負責（需等階段相關函式定義完）
+
 /* ---------- build stages: named snapshots of the allocation (e.g. Lv 30 / Lv 50 / 完成) ---------- */
-let stages=[], stEditing=null;
+var stages=[], stEditing=null;
 const stPts=t=>t.alloc.filter(x=>byId.has(x)&&!isStart(x)).length;
 function cleanStages(list){
   if(!Array.isArray(list)) return [];
   const out=[], names=new Set();
   for(const t of list){ if(!t||!Array.isArray(t.alloc)) continue;
     let name=String(t.name||'').trim().slice(0,40)||'未命名'; const base=name; let k=2; while(names.has(name)) name=`${base} (${k++})`; names.add(name);
-    out.push({name,alloc:t.alloc.map(String),picks:(Array.isArray(t.picks)?t.picks:[]).filter(x=>Array.isArray(x)&&x.length===2).map(([id,v])=>[String(id),+v||0])}); }
+    const o={name,alloc:t.alloc.map(String),picks:(Array.isArray(t.picks)?t.picks:[]).filter(x=>Array.isArray(x)&&x.length===2).map(([id,v])=>[String(id),+v||0])};
+    if(typeof t.note==='string'&&t.note.trim()) o.note=t.note.replace(/\s+$/,'').slice(0,NOTE_MAX); out.push(o); }
   return out;
 }
 function sigOf(a,p){ const A=[...a].filter(x=>byId.has(x)).sort(); const S=new Set(A); return A.join(',')+'|'+[...p].filter(([id])=>S.has(id)).map(([id,k])=>id+':'+k).sort().join(','); }
 const curSig=()=>sigOf(alloc,picks), stSig=t=>sigOf(t.alloc,t.picks);
 function stDefaultName(){ const n=spent(), L=needLevel(n); return L?`Lv ${L}`:`${n} 點`; }
-function stSnapshot(name){ return {name,alloc:[...alloc],picks:[...picks].filter(([id])=>alloc.has(id))}; }
+function stSnapshot(name,keep){ const o={name,alloc:[...alloc],picks:[...picks].filter(([id])=>alloc.has(id))}; if(keep&&keep.note) o.note=keep.note; return o; }   // keep：覆蓋時沿用原本的階段備註
 function sortStages(){ stages.sort((x,y)=>stPts(x)-stPts(y)); }
 function renderStages(force){
   const box=$('stList'); if(!box) return;
@@ -1610,10 +1724,11 @@ function renderStages(force){
     box.innerHTML=stages.map((t,i)=>{ const n=stPts(t), L=needLevel(n), on=stSig(t)===cur;
       const d=prevPts===null?'':` · +${n-prevPts}`; prevPts=n;
       if(stEditing===i) return `<div class="st-it${on?' cur':''}" data-i="${i}"><input type="text" class="st-rn" maxlength="40" value="${esc(t.name)}" aria-label="階段名稱"><button data-a="ok" title="確定">✓</button></div>`;
-      return `<div class="st-it${on?' cur':''}" data-i="${i}"><button class="st-go" data-a="go" title="切換到此階段"><b>${esc(t.name)}</b><small>${L?'Lv '+L:'超過上限'} · ${n} 點${d}</small></button>`+
+      return `<div class="st-it${on?' cur':''}" data-i="${i}"><button class="st-go" data-a="go" title="切換到此階段"><b>${esc(t.name)}${t.note?' <span class="st-nt" title="有備註">✎</span>':''}</b><small>${L?'Lv '+L:'超過上限'} · ${n} 點${d}</small></button>`+
         `<button data-a="upd" title="用目前配點覆蓋這個階段">更新</button><button data-a="ren" title="改名">改名</button><button data-a="del" title="刪除">✕</button></div>`; }).join('');
     const rn=box.querySelector('.st-rn'); if(rn&&document.activeElement!==rn){ rn.focus(); rn.select(); }
   }
+  renderNote();
   $('stName').placeholder=`階段名稱（留空＝${hasStart()?stDefaultName():'以等級命名'}）`;
 }
 function saveStage(){
@@ -1626,7 +1741,7 @@ function saveStage(){
   if(ex<0){ stages.push(stSnapshot(name)); done(`已存成階段「${name}」（${spent()} 點）`); return; }
   if(stSig(stages[ex])===sig){ toast(`階段「${name}」已是目前配點`); return; }
   askConfirm('階段名稱已存在',`已有名為 <b>${esc(name)}</b> 的階段（${stPts(stages[ex])} 點），要用目前配點（${spent()} 點）覆蓋嗎？${typed?'':'<br><br>想另外保留，請在名稱欄輸入其他名稱。'}`,'覆蓋','取消',
-    ()=>{ stages[ex]=stSnapshot(name); done(`已覆蓋階段「${name}」（${spent()} 點）`); });
+    ()=>{ stages[ex]=stSnapshot(name,stages[ex]); done(`已覆蓋階段「${name}」（${spent()} 點）`); });
 }
 function gotoStage(i){
   const t=stages[i]; if(!t) return;
@@ -1659,16 +1774,33 @@ $('stList').addEventListener('click',e=>{
   else if(a==='upd'){
     if(!hasStart()||!spent()){ toast('請先選擇起點並投點'); return; }
     if(stSig(t)===curSig()){ toast(`「${t.name}」已是目前配點`); return; }
-    askConfirm('更新階段',`要用目前配點（${spent()} 點）覆蓋 <b>${esc(t.name)}</b>（${stPts(t)} 點）嗎？`,'覆蓋','取消',()=>{ stages[i]=stSnapshot(t.name); sortStages(); render(); toast(`已更新「${t.name}」`); });
+    askConfirm('更新階段',`要用目前配點（${spent()} 點）覆蓋 <b>${esc(t.name)}</b>（${stPts(t)} 點）嗎？`,'覆蓋','取消',()=>{ stages[i]=stSnapshot(t.name,t); sortStages(); render(); toast(`已更新「${t.name}」`); });
   }
-  else if(a==='del') askConfirm('刪除階段',`確定刪除 <b>${esc(t.name)}</b>（${stPts(t)} 點）？目前畫面上的配點不受影響。`,'刪除','取消',()=>{ stages.splice(i,1); render(); toast(`已刪除「${t.name}」`); });
+  else if(a==='del') askConfirm('刪除階段',`確定刪除 <b>${esc(t.name)}</b>（${stPts(t)} 點）？${t.note?'這個階段的備註也會一起刪除。':''}目前畫面上的配點不受影響。`,'刪除','取消',()=>{ stages.splice(i,1); render(); toast(`已刪除「${t.name}」`); });
 });
 $('stList').addEventListener('keydown',e=>{ const inp=e.target.closest('.st-rn'); if(!inp) return;
   if(e.key==='Enter'){ e.preventDefault(); commitRename(inp); } else if(e.key==='Escape'){ e.preventDefault(); stEditing=null; render(); } });
 $('stList').addEventListener('focusout',e=>{ const inp=e.target.closest('.st-rn'); if(!inp) return; setTimeout(()=>{ if(stEditing!==null&&!$('stList').contains(document.activeElement)) commitRename(inp); },0); });
 
 /* ---------- share code: LT1 + base64url( version | start | sorted node ids (delta varint) | picks ) ---------- */
-const SH_PREFIX='LT1';
+const SH_PREFIX='LT1', SH_PREFIX_Z='LT2';   // LT2＝同一份內容經 deflate-raw 壓縮後再編碼
+const SH_RE=/^LT[12]/;
+const canZip=typeof CompressionStream==='function'&&typeof DecompressionStream==='function';
+async function zipBytes(u8,mode){ const st=new Blob([u8]).stream().pipeThrough(mode==='d'?new DecompressionStream('deflate-raw'):new CompressionStream('deflate-raw')); return new Uint8Array(await new Response(st).arrayBuffer()); }
+// 產生分享碼：壓縮後比較短才用 LT2，否則維持 LT1；瀏覽器不支援壓縮時也退回 LT1
+async function encodeShareZ(){ const c=encodeShare(); if(!canZip) return c;
+  try{ const z=SH_PREFIX_Z+b64u(await zipBytes(unb64u(c.slice(SH_PREFIX.length)))); return z.length<c.length?z:c; }catch(e){ return c; } }
+// 讀取分享碼：LT2 先解壓縮成 LT1 再沿用原本的解析與檢查碼驗證
+async function decodeShareZ(code){
+  code=String(code||'').trim().replace(/^.*#/,'').replace(/\s+/g,'');
+  if(code.startsWith(SH_PREFIX_Z)){
+    if(!canZip) throw new Error('這個瀏覽器不支援壓縮分享碼（LT2），請更新瀏覽器，或請對方改用「複製分享碼」以外的方式（例如流派檔案）分享');
+    let b; try{ b=unb64u(code.slice(SH_PREFIX_Z.length)); }catch(e){ throw new Error('分享碼含有無效字元'); }
+    let raw; try{ raw=await zipBytes(b,'d'); }catch(e){ throw new Error('分享碼不完整或被修改過（無法解壓縮）'); }
+    code=SH_PREFIX+b64u(raw);
+  }
+  return decodeShare(code);
+}
 function vPush(a,n){ n=Math.max(0,Math.floor(n)); while(n>=128){a.push((n&127)|128); n=Math.floor(n/128);} a.push(n); }
 function vRead(b,p){ let n=0,m=1,x; do{ if(p.i>=b.length) throw new Error('分享碼不完整'); x=b[p.i++]; n+=(x&127)*m; m*=128; }while(x&128); return n; }
 const idNum=id=>{const k=+String(id).slice(1); if(!/^n\d+$/.test(id)) throw new Error('節點 id 格式不支援：'+id); return k;};
@@ -1683,19 +1815,21 @@ function encodeShare(){
   vPush(a,ids.length); let prev=0; for(const k of ids){ vPush(a,k-prev); prev=k; }
   const pk=[...picks].filter(([id])=>alloc.has(id)).map(([id,k])=>[idNum(id),k]).sort((x,y)=>x[0]-y[0]);
   vPush(a,pk.length); prev=0; for(const [id,k] of pk){ vPush(a,id-prev); prev=id; vPush(a,k); }
-  const hasCond=condMode||activeConds.size>0;
+  const stNotes=stages.map((t,i)=>[i,t.note||'']).filter(x=>x[1]); const hasNote=!!buildNote||stNotes.length>0, hasCond=condMode||activeConds.size>0||hasNote;
   if(stages.length||hasCond){ vPush(a,stages.length); for(const t of stages){   // optional stage block (older readers ignore it)
     const nm=new TextEncoder().encode(t.name); vPush(a,nm.length); nm.forEach(x=>a.push(x));
     const sst=t.alloc.find(x=>isStart(x)); vPush(a,sst?idNum(sst):0);
     const si=t.alloc.filter(x=>!isStart(x)).map(idNum).sort((x,y)=>x-y); vPush(a,si.length); prev=0; for(const k of si){ vPush(a,k-prev); prev=k; }
     const sp=t.picks.map(([id,k])=>[idNum(id),k]).sort((x,y)=>x[0]-y[0]); vPush(a,sp.length); prev=0; for(const [id,k] of sp){ vPush(a,id-prev); prev=id; vPush(a,k); } } }
   if(hasCond){ vPush(a,condMode?1:0); const cl=[...activeConds]; vPush(a,cl.length); for(const c of cl){ const e=new TextEncoder().encode(c); vPush(a,e.length); e.forEach(x=>a.push(x)); } }
+  if(hasNote){ const e=new TextEncoder().encode(buildNote); vPush(a,e.length); e.forEach(x=>a.push(x)); }   // 備註（舊版讀不到這段也不影響）
+  if(stNotes.length){ vPush(a,stNotes.length); for(const [i,t] of stNotes){ vPush(a,i); const e=new TextEncoder().encode(t); vPush(a,e.length); e.forEach(x=>a.push(x)); } }   // 各階段備註（舊版會略過）
   let sum=0; for(const x of a) sum=(sum*31+x)%251; a.push(sum);
   return SH_PREFIX+b64u(a);
 }
 function decodeShare(code){
   code=String(code||'').trim().replace(/^.*#/,'').replace(/\s+/g,'');
-  if(!code.startsWith(SH_PREFIX)) throw new Error('不是分享碼（應以 LT1 開頭）');
+  if(!code.startsWith(SH_PREFIX)) throw new Error('不是分享碼（應以 LT1 或 LT2 開頭）');
   let b; try{ b=unb64u(code.slice(SH_PREFIX.length)); }catch(e){ throw new Error('分享碼含有無效字元'); }
   if(b.length<4) throw new Error('分享碼不完整');
   let sum=0; for(let i=0;i<b.length-1;i++) sum=(sum*31+b[i])%251; if(sum!==b[b.length-1]) throw new Error('分享碼不完整或被修改過（檢查碼不符）');
@@ -1708,20 +1842,31 @@ function decodeShare(code){
     const q=vRead(b,p); const sp=[]; prev=0; for(let i=0;i<q;i++){ prev+=vRead(b,p); sp.push(['n'+prev,vRead(b,p)]); }
     stL.push({name,alloc:al,picks:sp}); } }
   let cm=false; const cl=[]; if(p.i<b.length-1){ cm=vRead(b,p)===1; const nc=vRead(b,p); for(let j=0;j<nc;j++){ const l=vRead(b,p); cl.push(new TextDecoder().decode(b.slice(p.i,p.i+l))); p.i+=l; } }
-  return {type:'lootania-build',boardVersion:ver,start:st,alloc:allocL,picks:pk,stages:stL,condMode:cm,conds:cl,lastPick,autoPick3:$('autoPick').checked};
+  let note=''; if(p.i<b.length-1){ const l=vRead(b,p); note=new TextDecoder().decode(b.slice(p.i,p.i+l)); p.i+=l; }
+  if(p.i<b.length-1){ const k=vRead(b,p); for(let j=0;j<k;j++){ const i=vRead(b,p), l=vRead(b,p); const t=new TextDecoder().decode(b.slice(p.i,p.i+l)); p.i+=l; if(stL[i]) stL[i].note=t; } }
+  return {type:'lootania-build',boardVersion:ver,start:st,alloc:allocL,picks:pk,stages:stL,condMode:cm,conds:cl,note,lastPick,autoPick3:$('autoPick').checked};
 }
 async function copyText(s,okMsg){
   try{ await navigator.clipboard.writeText(s); toast(okMsg); }
   catch(e){ $('shIn').value=s; $('shIn').focus(); $('shIn').select(); toast('無法寫入剪貼簿，已放到下方文字框並選取，請手動複製'); }
 }
-$('shCopy').onclick=()=>{ try{ const c=encodeShare(); copyText(c,`已複製分享碼（${c.length} 字元，${board.version||'未標版本'}）`); }catch(e){ toast(e.message); } };
+// 壓縮是非同步的；Safari 要求在點擊當下呼叫剪貼簿，所以用 ClipboardItem 包 Promise，讓瀏覽器等壓縮完成再寫入
+async function copyLater(make,okMsg){
+  let p; try{ encodeShare(); p=make(); }catch(e){ toast(e.message); return; }   // 先同步檢查（例如尚未投點）
+  if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){
+    try{ await navigator.clipboard.write([new ClipboardItem({'text/plain':p.then(t=>new Blob([t],{type:'text/plain'}))})]); toast(okMsg(await p)); return; }catch(e){}
+  }
+  let t; try{ t=await p; }catch(e){ toast(e.message); return; }
+  copyText(t,okMsg(t));
+}
+$('shCopy').onclick=()=>copyLater(()=>encodeShareZ(),c=>`已複製分享碼（${c.length} 字元，${board.version||'未標版本'}）`);
 $('shLink').hidden=inFrame;
-$('shLink').onclick=()=>{ try{ copyText(location.href.split('#')[0]+'#'+encodeShare(),'已複製分享連結'); }catch(e){ toast(e.message); } };
-async function loadShare(code){ const s=decodeShare(code); await openBuild(s); scheduleSave(); }
+$('shLink').onclick=()=>copyLater(async()=>location.href.split('#')[0]+'#'+await encodeShareZ(),u=>`已複製分享連結（${u.length} 字元）`);
+async function loadShare(code){ const s=await decodeShareZ(code); await openBuild(s); scheduleSave(); }
 $('shLoad').onclick=async()=>{ const v=$('shIn').value; if(!v.trim()){ toast('請先貼上分享碼'); return; }
   try{ await loadShare(v); $('shIn').value=''; }catch(e){ showAlert('無法讀取分享碼',esc(e.message)); } };
 $('shIn').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); $('shLoad').click(); } });
-async function loadShareFromHash(){ const h=decodeURIComponent(location.hash.slice(1)); if(!h.startsWith(SH_PREFIX)) return false;
+async function loadShareFromHash(){ const h=decodeURIComponent(location.hash.slice(1)); if(!SH_RE.test(h)) return false;
   try{ await loadShare(h); history.replaceState(null,'',location.pathname+location.search); return true; }catch(e){ showAlert('無法讀取分享連結',esc(e.message)); return false; } }
 $('bOpen').onclick=()=>$('bFile').click();
 $('bFile').onchange=async ev=>{ const f=ev.target.files[0]; if(!f) return; try{ await openBuild(JSON.parse(await f.text())); scheduleSave(); }catch(e){ toast('讀取失敗：'+e.message); } ev.target.value=''; };
@@ -1843,7 +1988,7 @@ async function boot(){
   if(s&&s.boardVersion===board.version) ldStep('讀取上次的流派',`${(s.alloc||[]).length} 個節點`,null);
   setTool('select'); setMode('play');
   if(s&&s.boardVersion===board.version){ try{ applyBuild(s,true); }catch(e){} }
-  if(location.hash.slice(1).startsWith('LT1')) ldStep('讀取分享碼','',null);
+  if(/^LT[12]/.test(location.hash.slice(1))) ldStep('讀取分享碼','',null);
   if(await loadShareFromHash()) { render(); ldHide(); updFileState(); return; }
   render(); ldHide(); updFileState();
   offerLatest('boot');

@@ -117,6 +117,10 @@ input[type=range]{flex:1;accent-color:var(--accent)}
 .st-it input{flex:1;margin:2px 4px}
 .confirm{min-width:260px;max-width:min(380px,calc(100% - 32px))}
 .cf-msg{font-size:13px;text-align:left;color:#dcdcf0}
+.sh-opts{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.sh-opts button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:8px 12px}
+.sh-opts button small{font:11px var(--f-mono);color:var(--muted);word-break:break-all}
+.sh-opts button.primary small{color:inherit;opacity:.8}
 .cf-msg ul{margin:8px 0 0;padding:0;list-style:none;max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:6px}
 .cf-msg li{background:rgba(0,0,0,.25);border-radius:4px;padding:5px 8px}
 .cf-msg li b{display:block;font-size:13px}
@@ -329,6 +333,15 @@ svg.ic.dim>image[data-faded]{opacity:1}
       <div class="pk-title" id="confirmTitle">確認</div>
       <div id="confirmMsg" class="cf-msg"></div>
       <div class="row" style="justify-content:center;margin-top:12px"><button id="confirmYes">一併移除</button><button id="confirmNo">取消</button></div>
+    </div>
+    <div class="picker confirm sh-dlg" id="shDlg" role="dialog" aria-modal="true" aria-labelledby="shDlgTitle" hidden>
+      <div class="pk-title" id="shDlgTitle">複製分享連結</div>
+      <div class="cf-msg" id="shDlgMsg"></div>
+      <div class="sh-opts">
+        <button class="primary" id="shShort"><b>短網址</b><small id="shShortSub">例如 …/?s=k3Fx9aQ2</small></button>
+        <button id="shLong"><b>長網址</b><small id="shLongSub"></small></button>
+      </div>
+      <div class="row" style="justify-content:center;margin-top:10px"><button id="shDlgNo">取消</button></div>
     </div>
     <div class="picker" id="picker" role="dialog" aria-modal="true" aria-labelledby="pkTitle" hidden>
       <div class="pk-title" id="pkTitle"></div>
@@ -1791,6 +1804,9 @@ $('stList').addEventListener('focusout',e=>{ const inp=e.target.closest('.st-rn'
 /* ---------- share code: LT1 + base64url( version | start | sorted node ids (delta varint) | picks ) ---------- */
 const SH_PREFIX='LT1', SH_PREFIX_Z='LT2';   // LT2＝同一份內容經 deflate-raw 壓縮後再編碼
 const SH_RE=/^LT[12]/;
+// 短網址服務（Cloudflare Worker）網址，例如 'https://lootania-share.xxx.workers.dev'；留空＝不提供短網址，複製分享連結時直接用長網址
+const SHORT_API='https://lootania-share.ayakashikaidevelopers.workers.dev';
+const SHORT_ID_RE=/^[0-9A-Za-z]{6,20}$/;
 const canZip=typeof CompressionStream==='function'&&typeof DecompressionStream==='function';
 async function zipBytes(u8,mode){ const st=new Blob([u8]).stream().pipeThrough(mode==='d'?new DecompressionStream('deflate-raw'):new CompressionStream('deflate-raw')); return new Uint8Array(await new Response(st).arrayBuffer()); }
 // 產生分享碼：壓縮後比較短才用 LT2，否則維持 LT1；瀏覽器不支援壓縮時也退回 LT1
@@ -1870,11 +1886,52 @@ async function copyLater(make,okMsg){
 }
 $('shCopy').onclick=()=>copyLater(()=>encodeShareZ(),c=>`已複製分享碼（${c.length} 字元，${board.version||'未標版本'}）`);
 $('shLink').hidden=inFrame;
-$('shLink').onclick=()=>copyLater(async()=>location.href.split('#')[0]+'#'+await encodeShareZ(),u=>`已複製分享連結（${u.length} 字元）`);
+const pageBase=()=>location.href.split(/[?#]/)[0];
+const longLink=async()=>{ const u=new URL(location.href); u.hash=''; u.searchParams.delete('s'); return u.href.replace(/#$/,'')+'#'+await encodeShareZ(); };
+const shortApi=()=>SHORT_API.replace(/\/+$/,'');
+// 產生短網址：失敗時（服務沒回應、額度用完…）自動改用長網址，並在提示裡說明原因
+let shFallback='';
+async function shortLink(){
+  const code=await encodeShareZ(); shFallback='';
+  try{
+    const ctl=new AbortController(), tm=setTimeout(()=>ctl.abort(),8000);
+    const r=await fetch(shortApi()+'/s',{method:'POST',headers:{'Content-Type':'text/plain'},body:code,signal:ctl.signal}); clearTimeout(tm);
+    if(!r.ok) throw new Error((await r.text().catch(()=>''))||('HTTP '+r.status));
+    const j=await r.json(); if(!j||!SHORT_ID_RE.test(j.id||'')) throw new Error('伺服器回應格式不正確');
+    return pageBase()+'?s='+j.id;
+  }catch(e){ shFallback=e.name==='AbortError'?'短網址服務沒有回應':e instanceof TypeError?'無法連線到短網址服務':(e.message||'短網址服務無法連線'); return await longLink(); }
+}
+function closeShDlg(){ $('shDlg').hidden=true; }
+$('shLink').onclick=async()=>{
+  if(!SHORT_API||location.protocol==='file:'){ copyLater(longLink,u=>`已複製分享連結（${u.length} 字元）`); return; }
+  try{ encodeShare(); }catch(e){ toast(e.message); return; }   // 尚未投點等情況先擋下
+  let n=0; try{ n=(await longLink()).length; }catch(e){}
+  $('shDlgMsg').textContent='短網址比較好貼，但需要連線到短網址服務；長網址不依賴任何服務，永久有效。';
+  $('shLongSub').textContent=n?`${n} 字元，直接包含整份流派`:'直接包含整份流派';
+  $('shDlg').hidden=false; $('shShort').focus();
+};
+$('shShort').onclick=()=>{ closeShDlg(); copyLater(shortLink,u=>shFallback?`短網址產生失敗（${shFallback}），已改為複製長網址（${u.length} 字元）`:`已複製短網址：${u}`); };
+$('shLong').onclick=()=>{ closeShDlg(); copyLater(longLink,u=>`已複製長網址（${u.length} 字元）`); };
+$('shDlgNo').onclick=closeShDlg;
+$('shDlg').addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.stopPropagation(); closeShDlg(); } });
 async function loadShare(code){ const s=await decodeShareZ(code); await openBuild(s); scheduleSave(); }
 $('shLoad').onclick=async()=>{ const v=$('shIn').value; if(!v.trim()){ toast('請先貼上分享碼'); return; }
   try{ await loadShare(v); $('shIn').value=''; }catch(e){ showAlert('無法讀取分享碼',esc(e.message)); } };
 $('shIn').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); $('shLoad').click(); } });
+// 短網址：?s=代號 → 向短網址服務取回分享碼再讀取
+async function loadShareFromQuery(){
+  const id=new URLSearchParams(location.search).get('s'); if(id==null) return false;
+  const clean=()=>{ const u=new URL(location.href); u.searchParams.delete('s'); history.replaceState(null,'',u.pathname+u.search+u.hash); };
+  try{
+    if(!SHORT_ID_RE.test(id)) throw new Error('短網址代號格式不正確，請確認連結是否複製完整');
+    if(!SHORT_API) throw new Error('這個頁面沒有設定短網址服務，無法讀取短網址');
+    let r; try{ r=await fetch(shortApi()+'/s/'+id); }catch(e){ throw new Error('無法連線到短網址服務，請稍後再試，或請對方改傳長網址'); }
+    if(r.status===404) throw new Error('找不到這個短網址（代號錯誤，或資料已被刪除）');
+    if(!r.ok) throw new Error('短網址服務錯誤（HTTP '+r.status+'），請稍後再試');
+    await loadShare(await r.text()); clean(); return true;
+  }catch(e){ clean(); showAlert('無法讀取短網址',esc(e.message)); return false; }
+}
+async function loadShareFromUrl(){ return (await loadShareFromHash())||(await loadShareFromQuery()); }
 async function loadShareFromHash(){ const h=decodeURIComponent(location.hash.slice(1)); if(!SH_RE.test(h)) return false;
   try{ await loadShare(h); history.replaceState(null,'',location.pathname+location.search); return true; }catch(e){ showAlert('無法讀取分享連結',esc(e.message)); return false; } }
 $('bOpen').onclick=()=>$('bFile').click();
@@ -1997,8 +2054,8 @@ async function boot(){
   if(s&&s.boardVersion===board.version) ldStep('讀取上次的流派',`${(s.alloc||[]).length} 個節點`,null);
   setTool('select'); setMode('play');
   if(s&&s.boardVersion===board.version){ try{ applyBuild(s,true); }catch(e){} }
-  if(/^LT[12]/.test(location.hash.slice(1))) ldStep('讀取分享碼','',null);
-  if(await loadShareFromHash()) { render(); ldHide(); updFileState(); return; }
+  if(/^LT[12]/.test(location.hash.slice(1))||new URLSearchParams(location.search).has('s')) ldStep('讀取分享碼','',null);
+  if(await loadShareFromUrl()) { render(); ldHide(); updFileState(); return; }
   render(); ldHide(); updFileState();
   offerLatest('boot');
 }

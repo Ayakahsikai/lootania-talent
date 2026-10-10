@@ -1843,7 +1843,7 @@ function encodeShare(){
     const sst=t.alloc.find(x=>isStart(x)); vPush(a,sst?idNum(sst):0);
     const si=t.alloc.filter(x=>!isStart(x)).map(idNum).sort((x,y)=>x-y); vPush(a,si.length); prev=0; for(const k of si){ vPush(a,k-prev); prev=k; }
     const sp=t.picks.map(([id,k])=>[idNum(id),k]).sort((x,y)=>x[0]-y[0]); vPush(a,sp.length); prev=0; for(const [id,k] of sp){ vPush(a,id-prev); prev=id; vPush(a,k); } } }
-  if(hasCond){ vPush(a,condMode?1:0); const cl=[...activeConds]; vPush(a,cl.length); for(const c of cl){ const e=new TextEncoder().encode(c); vPush(a,e.length); e.forEach(x=>a.push(x)); } }
+  if(hasCond){ vPush(a,condMode?1:0); const cl=[...activeConds].sort(); vPush(a,cl.length); for(const c of cl){ const e=new TextEncoder().encode(c); vPush(a,e.length); e.forEach(x=>a.push(x)); } }
   if(hasNote){ const e=new TextEncoder().encode(buildNote); vPush(a,e.length); e.forEach(x=>a.push(x)); }   // 備註（舊版讀不到這段也不影響）
   const auto=noteAuto&&hasNote;
   if(stNotes.length||auto){ vPush(a,stNotes.length); for(const [i,t] of stNotes){ vPush(a,i); const e=new TextEncoder().encode(t); vPush(a,e.length); e.forEach(x=>a.push(x)); } }   // 各階段備註（舊版會略過）

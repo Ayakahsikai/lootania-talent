@@ -2029,13 +2029,14 @@ function skChoose(id){ const c=skPickCtx; if(!c) return;
   skClosePick(); }
 // ---- 提示框 ----
 function skTipHTML(id,ep){ const x=WK&&WK.byId.get(id); if(!x) return '';
-  if(x.kind==='rune') return `<div class="h">符文：${esc(x.name)}</div><div class="d">${esc(runeEff(x))}</div>${(x.compatTags||[]).length?`<div class="m">相容標籤：${x.compatTags.map(t=>`【${esc(t)}】`).join('')}</div>`:'<div class="m">相容標籤：（資料未填）</div>'}${x.source?`<div class="m">獲得方式：${esc(x.source)}</div>`:''}`;
+  if(x.kind==='rune') return `<div class="h">符文：${esc(x.name)}</div><div class="d">${esc(runeEff(x))}</div>${(x.compatTags||[]).length?`<div class="m">相容標籤：${x.compatTags.map(t=>`【${esc(t)}】`).join('')}</div>`:'<div class="m">相容標籤：（資料未填）</div>'}${x.source?`<div class="m">獲得方式：${esc(x.source).replace(/\n/g,'<br>')}</div>`:''}`;
   const st=skStats(); const where=skCfg.move.id===id?skCfg.move:skCfg.rows.find(r=>r.id===id); const pk=skPickLv(x,where?where.lv:0,st);
   let ef=pk?effAt(x,pk.r):''; if(ep) ef=toEP(ef);
   return `<div class="h">${esc(x.name)}</div>${(x.tags||[]).length?`<div class="tg">${x.tags.map(t=>`【${esc(t)}】`).join('')}</div>`:''}
     <div class="m">${x.maxLevel?`[等級上限:${x.maxLevel}]　`:''}${(x.weapons||[]).length?`需求武器: ${esc(x.weapons.join('/'))}`:'需求武器: 無'}</div>
     ${x.desc?`<div class="d">${esc(x.desc).replace(/\n/g,'<br>')}</div>`:''}
-    ${pk?`<div class="m">[Lv.${pk.r.lv}] 需求：${reqTxt(pk.r,st)}</div><div class="e">${esc(ef)}</div>`:''}`; }
+    ${pk?`<div class="m">[Lv.${pk.r.lv}] 需求：${reqTxt(pk.r,st)}</div><div class="e">${esc(ef)}</div>`:''}
+    ${x.source?`<div class="m">獲得方式：${esc(x.source).replace(/\n/g,'<br>')}</div>`:''}`; }
 function skTipMove(ev){ const t=$('skTipBox'), w=t.offsetWidth, h=t.offsetHeight, m=14; let x=ev.clientX+m, y=ev.clientY+m;
   if(x+w>innerWidth-8) x=ev.clientX-w-m; if(y+h>innerHeight-8) y=Math.max(8,innerHeight-h-8); t.style.left=Math.max(8,x)+'px'; t.style.top=y+'px'; }
 

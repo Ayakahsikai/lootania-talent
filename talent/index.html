@@ -1239,13 +1239,10 @@ function renderConds(rows,offN){
     const ids=[...skFocusSet]; const grp=gid=>ids.filter(c=>(CONDS_BY_ID.get(c)?.group||'other')===gid);
     box.innerHTML=`<div class="sk-focus"><b>依技能「${esc(skFocusName)}」判定</b><button id="skFocusX">取消選取</button></div>`
       +[...COND_GROUPS,['other','其他']].map(([gid,gl])=>{ const g=grp(gid); return g.length?`<div class="cond-g"><span>${gl}</span>${g.map(c=>`<button class="on" disabled>${esc(c)}</button>`).join('')}</div>`:''; }).join('')
-      +(skDmg&&skDmg.size?`<p class="note">傷害類型：<b style="color:var(--fg)">${[...skDmg].join('、')}</b>${skConv&&skDmg.has(skConv.to)?`（${esc(skConv.src)}：物理傷害轉化為${skConv.to}傷害，物理傷害相關加成不生效）`:''}。指定傷害類型的加成（例如物理傷害、${DMG_EL.join('／')}傷害、元素傷害、抗性穿透）只對同類型生效。</p>`:'')
-      +(skBuffN?`<p class="note">已放入增益技能 ${skBuffN} 種（「每啟用 N 種增益技能」類加成以此判定）。</p>`:'')
+      +(skConv&&skDmg&&skDmg.has(skConv.to)?`<p class="note">傷害類型：<b style="color:var(--fg)">${[...skDmg].join('、')}</b>（${esc(skConv.src)}：物理傷害轉化為${skConv.to}傷害，物理傷害相關加成不生效）</p>`:'')
       +(skGranted.length?`<p class="note" style="color:var(--accent)">額外標籤：${esc(skGranted.join('、'))}</p>`:'')
       +(skRules.ench?'<p class="note" style="color:var(--accent)">銘文勇士生效（已放入附魔技能）：此攻擊技能也套用魔法攻擊力加成。</p>':'')
-      +(skRules.ninja?'<p class="note" style="color:var(--accent)">忍術大師生效（短劍／拳套）：此法術技能改套用攻擊力加成，魔法攻擊力加成不生效。</p>':'')
-      +(skFocusSet.has('攻擊')!==skFocusSet.has('法術')?`<p class="note">${skFocusSet.has('攻擊')?'攻擊技能：法術相關加成（法術、施法速度、魔法攻擊力…）不生效。':'法術技能：攻擊相關加成（攻擊力、攻擊速度、攻擊傷害…）不生效。'}同時提到攻擊與法術的加成都生效。</p>`:'')
-      +`<p class="note">武器：技能有限制武器時用技能的武器；沒有限制時沿用你手動勾選的武器條件。狀態條件（暴擊時等）沿用手動勾選。</p>`;
+      +(skRules.ninja?'<p class="note" style="color:var(--accent)">忍術大師生效（短劍／拳套）：此法術技能改套用攻擊力加成，魔法攻擊力加成不生效。</p>':'');
     return; }
   $('condMode').disabled=false;
   $('condMode').checked=condMode; const box=$('condChips'); box.hidden=!condMode;

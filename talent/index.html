@@ -322,6 +322,7 @@ svg.ic.dim>image[data-faded]{opacity:1}
 .sk-info .rns{font-size:12px;color:var(--muted)}.sk-info .rns span{color:var(--fg)}.sk-info .rns .bad{color:var(--warn)}
 .sk-info .hint{color:var(--muted);font-size:12.5px}
 .sk-row,.sk-mv{cursor:pointer}.sk-row.sel,.sk-mv.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.buffcalc{display:block;color:var(--accent);font-size:11.5px;font-weight:400}
 .sk-focus{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px}.sk-focus b{color:var(--accent);font-weight:600}.sk-focus button{margin-left:auto;font-size:12px;padding:2px 8px}
 .sk-mv .note{font-size:12px;color:#c9b27a;margin-top:2px}
 .sk-tipbox{position:fixed;z-index:120;pointer-events:none;width:320px;background:rgba(40,42,92,.97);border:1px solid #8a8fd8;border-radius:6px;box-shadow:0 6px 22px rgba(0,0,0,.6);color:#f2f2f2;font-size:12.5px;line-height:1.55;padding:8px 10px}
@@ -924,7 +925,25 @@ var skEnchant=false, skRules={ench:false,ninja:false};
 const ENCHANT_NAMES=['飛毒殺'];
 const isEnchantSkill=s=>(s.tags||[]).includes('附魔')||ENCHANT_NAMES.includes(s.name)||/附魔/.test((s.name||'')+' '+(s.desc||''));
 const RE_ENCH=/啟用附魔技能時/, RE_ENCH_ATK=/攻擊技能倍率將同時計算攻擊力與魔法攻擊力/, RE_NINJA=/法術技能倍率將由攻擊力計算/;
-const statCondOK=(stat,conds)=>conds.every(g=>g.some(c=>condHas(c)||(c==='附魔'&&skFocusSet&&skEnchant&&RE_ENCH.test(stat))||(c==='血魔法'&&skFocusSet&&/所有非保留技能將獲得【血魔法】標籤/.test(stat))));
+// 傷害類型（只在技能頁選取技能時判定）：技能的傷害類型＝標籤裡的物理／火焰／冰冷／閃電／毒素／神聖；
+//   放了轉換型附魔（例如神聖附魔：物理傷害轉化為神聖傷害）時，物理改成該元素
+//   「物理傷害」「神聖傷害」「元素傷害」「火焰抗性穿透」這類指定傷害類型的加成，只對同類型的技能生效
+const DMG_EL=['火焰','冰冷','閃電','毒素','神聖'];
+const ENCH_ELEM={'火焰附魔':'火焰','冰冷附魔':'冰冷','閃電附魔':'閃電','神聖附魔':'神聖','飛毒殺':'毒素'};
+var skDmg=null, skConv=null;   // skDmg：選取技能的傷害類型；skConv：{to:'神聖',src:'神聖附魔'}
+const _dmgCache=new Map();
+function statDmgTypes(stat){ if(_dmgCache.has(stat)) return _dmgCache.get(stat); const s=String(stat||''); let r=null;
+  if(/無視目標物理減傷/.test(s)) r=new Set(['物理']);
+  else if(!/附魔/.test(s)&&/傷害|穿透/.test(s)&&!/受到|抗性(?!穿透)|抗姓|減傷/.test(s)){ const ts=new Set(); if(/物理/.test(s)) ts.add('物理');
+    for(const e of DMG_EL) if(s.includes(e)) ts.add(e); if(/元素/.test(s)) DMG_EL.forEach(e=>ts.add(e)); if(ts.size) r=ts; }
+  _dmgCache.set(stat,r); return r; }
+function typeOff(stat){ if(!skFocusSet||!skDmg||!skDmg.size) return false; const ts=statDmgTypes(stat); return !!ts&&![...ts].some(x=>skDmg.has(x)); }
+// 「使用火焰、冰冷、閃電、神聖附魔時」：放了列出的其中一種附魔才算
+// 「每啟用{v}種增益技能…」：條件【增益】是指技能頁放了增益技能（標籤含【增益】，附魔技能也算），不是選取的技能本身
+var skBuffN=0;
+const RE_BUFF_CNT=/啟用.*增益技能/;
+const enchListOK=stat=>{ const m=/使用(.+?)附魔時/.exec(stat); return !!(m&&skConv&&m[1].includes(skConv.to)); };
+const statCondOK=(stat,conds)=>conds.every(g=>g.some(c=>condHas(c)||(c==='增益'&&skFocusSet&&skBuffN>0&&RE_BUFF_CNT.test(stat))||(c==='附魔'&&skFocusSet&&skEnchant&&RE_ENCH.test(stat))||(c==='附魔'&&skFocusSet&&enchListOK(stat))||(c==='血魔法'&&skFocusSet&&/所有非保留技能將獲得【血魔法】標籤/.test(stat))));
 function skCalcRules(){ skRules={ench:false,ninja:false}; if(!skFocusSet) return;
   const A=skFocusSet.has('攻擊'), S=skFocusSet.has('法術'), m=totals().m;
   const has=re=>[...m.values()].some(r=>re.test(r.stat)&&statCondOK(r.stat,statClass(r.stat).conds));
@@ -935,7 +954,7 @@ function kindOff(stat){ if(!skFocusSet) return false; const A=skFocusSet.has('�
   if(A&&skRules.ench&&magic) return false;                 // 銘文勇士：攻擊技能也算魔法攻擊力
   if(S&&skRules.ninja){ if(magic&&!atkPow) return true; if(atkPow) return false; }   // 忍術大師：法術技能改用攻擊力
   const k=statKind(stat); return A?k==='spell':k==='attack'; }
-const statOff=stat=>condOn()&&(!statCondOK(stat,statClass(stat).conds)||kindOff(stat));
+const statOff=stat=>condOn()&&(!statCondOK(stat,statClass(stat).conds)||kindOff(stat)||typeOff(stat));
 const condTxt=conds=>conds.map(g=>g.join('/')).join(' + ');
 function condChips(conds){ return conds.length?`<span class="cds">${conds.map(g=>`<span class="cd${condOn()&&g.some(c=>condHas(c))?' ok':''}">${esc(g.join('/'))}</span>`).join('')}</span>`:''; }
 function modTipHTML(m){ return `<div${statOff(m.stat)?' class="moff"':''}>${esc(fmtMod(m))}${condChips(statClass(m.stat).conds)}</div>`; }
@@ -1186,11 +1205,19 @@ function renderTotals(){
   const isAttr=r=>!r.text&&ATTR.includes(r.stat);
   const grp=new Map(); let offN=0;
   skCalcRules();
-  for(const r of all){ r.cls=statClass(r.stat); r.off=condOn()&&(!statCondOK(r.stat,r.cls.conds)||kindOff(r.stat)); if(r.off) offN++;
+  for(const r of all){ r.cls=statClass(r.stat); r.off=condOn()&&(!statCondOK(r.stat,r.cls.conds)||kindOff(r.stat)||typeOff(r.stat)); if(r.off) offN++;
     const g=r.off?'off':r.cls.cat; if(!grp.has(g)) grp.set(g,[]); grp.get(g).push(r); }
   const rowHTML=r=>{
     if(r.text) return `<dt class="fx">${esc(r.stat.split('{v}').join(''))}</dt><dd>${r.count>1?'×'+r.count:''}</dd>`;
-    if(r.stat.includes('{v}')){const parts=r.stat.split('{v}');let h='';parts.forEach((p,j)=>{h+=esc(p);if(j<parts.length-1){const x=r.slots[Math.min(j,r.slots.length-1)];h+=`<b class="tv">${fmtVal(x.value,x.unit)}</b>`;}});return `<dt>${h}</dt><dd></dd>`;}
+    if(r.stat.includes('{v}')){const parts=r.stat.split('{v}');let h='';parts.forEach((p,j)=>{h+=esc(p);if(j<parts.length-1){const x=r.slots[Math.min(j,r.slots.length-1)];h+=`<b class="tv">${fmtVal(x.value,x.unit)}</b>`;}});
+      // 「每啟用 N 種增益技能，獲得…」：依技能頁目前放的增益技能數量換算
+      if(RE_BUFF_CNT.test(r.stat)&&r.slots.length>=2&&typeof skBuffCount==='function'){ const n=skBuffCount(); if(n!=null){ const per=+r.slots[0].value||1, x=r.slots[r.slots.length-1];
+        h+=`<small class="buffcalc">（目前增益技能 ${n} 種 → ${fmtVal(Math.floor(n/per)*x.value,x.unit)}）</small>`; } }
+      // 「每 N 敏捷提供 X 法術傷害」這類：依目前能力值換算（基本值 5＋天賦加成；技能頁有手動填的話用手動值）
+      const am=/每\{v\}點?(力量|敏捷|智力|幸運)提供\{v\}/.exec(r.stat);
+      if(am&&PLAYER&&r.slots.length>=2&&typeof skStats==='function'){ const key={'力量':'str','敏捷':'dex','智力':'int','幸運':'luk'}[am[1]], have=skStats()[key], per=+r.slots[0].value||1, x=r.slots[1];
+        h+=`<small class="buffcalc">（目前${am[1]} ${have} → ${fmtVal(Math.floor(have/per)*x.value,x.unit)}）</small>`; }
+      return `<dt>${h}</dt><dd></dd>`;}
     if(isAttr(r)) return `<dt class="attr">${esc(r.stat)}</dt><dd class="attr">${fmtVal(r.slots[0].value,r.slots[0].unit)}</dd>`;
     return `<dt>${esc(r.stat)}</dt><dd>${fmtVal(r.slots[0].value,r.slots[0].unit)}</dd>`; };
   const withConds=(html,r)=>{ html=html.replace('</dt>',condChips(r.cls.conds)+'</dt>'); if(r.off) html=html.replace('<dt ','<dt data-off ').replace('<dd ','<dd data-off '); return html; };
@@ -1212,6 +1239,8 @@ function renderConds(rows,offN){
     const ids=[...skFocusSet]; const grp=gid=>ids.filter(c=>(CONDS_BY_ID.get(c)?.group||'other')===gid);
     box.innerHTML=`<div class="sk-focus"><b>依技能「${esc(skFocusName)}」判定</b><button id="skFocusX">取消選取</button></div>`
       +[...COND_GROUPS,['other','其他']].map(([gid,gl])=>{ const g=grp(gid); return g.length?`<div class="cond-g"><span>${gl}</span>${g.map(c=>`<button class="on" disabled>${esc(c)}</button>`).join('')}</div>`:''; }).join('')
+      +(skDmg&&skDmg.size?`<p class="note">傷害類型：<b style="color:var(--fg)">${[...skDmg].join('、')}</b>${skConv&&skDmg.has(skConv.to)?`（${esc(skConv.src)}：物理傷害轉化為${skConv.to}傷害，物理傷害相關加成不生效）`:''}。指定傷害類型的加成（例如物理傷害、${DMG_EL.join('／')}傷害、元素傷害、抗性穿透）只對同類型生效。</p>`:'')
+      +(skBuffN?`<p class="note">已放入增益技能 ${skBuffN} 種（「每啟用 N 種增益技能」類加成以此判定）。</p>`:'')
       +(skGranted.length?`<p class="note" style="color:var(--accent)">額外標籤：${esc(skGranted.join('、'))}</p>`:'')
       +(skRules.ench?'<p class="note" style="color:var(--accent)">銘文勇士生效（已放入附魔技能）：此攻擊技能也套用魔法攻擊力加成。</p>':'')
       +(skRules.ninja?'<p class="note" style="color:var(--accent)">忍術大師生效（短劍／拳套）：此法術技能改套用攻擊力加成，魔法攻擊力加成不生效。</p>':'')
@@ -1739,6 +1768,8 @@ function applyBuild(s,quiet){
   buildNote=typeof s.note==='string'?s.note.slice(0,NOTE_MAX):''; noteAuto=s.noteAuto===true; if(noteEditing||!$('noteModal').hidden){ $('noteModal').hidden=true; noteEditing=false; } renderNote();
   condMode=s.condMode===true; activeConds=new Set(Array.isArray(s.conds)?s.conds.map(String).slice(0,200):[]);
   skCfg=skNorm(s.skills); if(skView) skRender();
+  // 流派有技能配置時，背景先讀技能資料，讓「增益技能數」等計算在天賦畫面也能顯示
+  if(PLAYER&&skUsed()) setTimeout(()=>loadWiki().then(()=>{ render(); if(skView) skRender(); }).catch(()=>{}),0);
   render();
   const warn=(s.boardVersion&&s.boardVersion!==(board.version||''))?`（此配點是在 ${s.boardVersion} 建立，目前是 ${board.version||'未標版本'}）`:'';
   if(spent()>capPts()) setTimeout(()=>toast(`這份配點共 ${spent()} 點，超過上限 ${capPts()} 點`),0);
@@ -1863,7 +1894,9 @@ function skRender(){
   box.innerHTML=h;
   if(skFocus!=null){ const el=skFocus==='move'?box.querySelector('.sk-mv'):box.querySelectorAll('.sk-row')[skFocus]; if(el) el.classList.add('sel'); }
 }
-function skSet(fn){ fn(); scheduleSave(); skRender(); if(skFocus!=null) skSetFocus(skFocus); }
+// 技能頁目前放的增益技能數量（標籤含【增益】，附魔技能也算）；還沒讀到技能資料時回傳 null
+function skBuffCount(){ if(!WK) return null; return [skCfg.move,...skCfg.rows].filter(r=>{ const s=r.id&&WK.byId.get(r.id); return s&&((s.tags||[]).includes('增益')||isEnchantSkill(s)); }).length; }
+function skSet(fn){ fn(); scheduleSave(); skRender(); if(skFocus!=null) skSetFocus(skFocus); else render(); }
 // ---- 選取技能：右側「加成總計」改用這個技能的條件判定生效／未生效 ----
 let skFocus=null;
 // 讓技能「視為【血魔法】」的來源：天賦「所有非保留技能將獲得【血魔法】標籤」、符文（血法師：全部技能；犧牲血咒：法術、非保留技能）
@@ -1889,18 +1922,26 @@ function skCondsOf(sk,row){
   for(const c of activeConds) if(CONDS_BY_ID.get(c)?.group==='state') set.add(c);
   return set; }
 function skSetFocus(where){
+  skBuffN=skBuffCount()||0;
   skEnchant=!!WK&&[skCfg.move,...skCfg.rows].some(r=>{ const s=r.id&&WK.byId.get(r.id); return s&&isEnchantSkill(s); });   // 附魔技能：標籤含【附魔】，或名稱／說明提到「附魔」（例如飛毒殺：「附魔一次只能開啟一種」）
   const x=where==null?null:(where==='move'?skCfg.move:skCfg.rows[where]); const sk=x&&x.id&&WK&&WK.byId.get(x.id);
-  if(!sk){ skFocus=null; skFocusSet=null; skFocusName=''; }
-  else { skFocus=where; skFocusSet=skCondsOf(sk,where==='move'?null:x); skFocusName=sk.name; }
+  if(!sk){ skFocus=null; skFocusSet=null; skFocusName=''; skDmg=null; skConv=null; }
+  else { skFocus=where; skFocusSet=skCondsOf(sk,where==='move'?null:x); skFocusName=sk.name;
+    // 轉換型附魔：附魔一次只能開啟一種，取第一個
+    skConv=null; for(const r of [skCfg.move,...skCfg.rows]){ const s=r.id&&WK.byId.get(r.id); if(!s||!isEnchantSkill(s)) continue;
+      const m=/轉化為(火焰|冰冷|閃電|毒素|神聖)傷害/.exec(s.desc||''); const to=(m&&m[1])||ENCH_ELEM[s.name]; if(to){ skConv={to,src:s.name}; break; } }
+    const tags=skTagsOf(sk,where==='move'?null:x); skDmg=new Set(tags.filter(t=>t==='物理'||DMG_EL.includes(t)));
+    if(skConv&&skDmg.has('物理')){ skDmg.delete('物理'); skDmg.add(skConv.to); } else if(skConv&&!skDmg.size) { /* 沒有傷害類型標籤的技能不轉換 */ }
+    skFocusSet=skCondsOf(sk,where==='move'?null:x); }
   document.querySelectorAll('#skBody .sk-row.sel,#skBody .sk-mv.sel').forEach(e=>e.classList.remove('sel'));
   if(skFocus!=null){ const el=skFocus==='move'?document.querySelector('#skBody .sk-mv'):document.querySelectorAll('#skBody .sk-row')[skFocus]; if(el) el.classList.add('sel'); }
   render(); }
-function skShow(on){ skView=on; if(!on&&skFocus!=null){ skFocus=null; skFocusSet=null; skFocusName=''; render(); } $('skv').hidden=!on; $('vtTalent').setAttribute('aria-pressed',String(!on)); $('vtSkill').setAttribute('aria-pressed',String(on)); $('tip').hidden=true;
+function skShow(on){ skView=on; if(!on&&skFocus!=null){ skFocus=null; skFocusSet=null; skFocusName=''; skDmg=null; skConv=null; render(); } $('skv').hidden=!on; $('vtTalent').setAttribute('aria-pressed',String(!on)); $('vtSkill').setAttribute('aria-pressed',String(on)); $('tip').hidden=true;
   if(on){ skRender(); loadWiki().then(()=>skRender()).catch(e=>{ $('skBody').innerHTML=`<div class="sk-empty">無法讀取技能資料：${esc(e.message)}<br><small>資料來源：${esc(WIKI_BASE)}data/versions.json</small><br><button id="skRetry" style="margin-top:8px">重新讀取</button></div>`; }); } }
 // ---- 選擇視窗 ----
 let skPickCtx=null;
 function skOpenPick(ctx){ skPickCtx=ctx; $('skPick').hidden=false; $('skPickQ').value=''; $('skPickTabs').hidden=ctx.type!=='skill'||ctx.where==='move'; skPickTab='all';
+  $('skPickTabs').querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('on',b.dataset.tab==='all'));   // 每次打開都回到「全部」，按鈕狀態一起重設
   $('skPickT').textContent=ctx.type==='rune'?`選擇符文（第 ${ctx.where+1} 列 第 ${ctx.r+1} 格）`:ctx.where==='move'?'選擇位移技能':`選擇技能（第 ${ctx.where+1} 列）`;
   skPickList(); setTimeout(()=>$('skPickQ').focus(),0); }
 let skPickTab='all';

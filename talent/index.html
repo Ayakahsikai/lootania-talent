@@ -290,12 +290,16 @@ svg.ic.dim>image[data-faded]{opacity:1}
 .vtab{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .vtab button{border:0;border-radius:0;background:transparent;padding:7px 0;color:var(--muted)}
 .vtab button[aria-pressed="true"]{background:#2a2410;color:var(--accent);font-weight:600}
+.picker.confirm{z-index:40}   /* 確認視窗要蓋在技能頁上 */
 .skv{position:absolute;inset:0;z-index:30;overflow:auto;background:var(--bg);padding:14px 16px 24px}
 .skv-in{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
 .skv-top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
 .skv-top h2{margin:0;font-size:16px;color:var(--fg)}
 .skv-src{font-size:12px;color:var(--muted)}.skv-src.warn{color:var(--warn)}
 .skv-top .sp{flex:1}
+.skv-top .skv-src{order:9;flex-basis:100%}
+.skv-stage{font-size:12.5px;padding:2px 8px;border:1px solid var(--line);border-radius:999px;color:var(--muted)}.skv-stage.on{color:var(--accent);border-color:#5a4a1c}
+#skCopy{padding:5px 8px;background:#0c0c0e;border:1px solid var(--line);border-radius:6px;color:var(--fg);font-size:12.5px;max-width:220px}
 .skv-stats{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);font-size:12.5px;color:var(--muted)}
 .skv-stats label{display:flex;align-items:center;gap:4px}
 .skv-stats input[type=number]{width:62px;padding:3px 5px;background:#0c0c0e;border:1px solid var(--line);border-radius:4px;color:var(--fg);font:12.5px var(--f-mono)}
@@ -425,7 +429,7 @@ svg.ic.dim>image[data-faded]{opacity:1}
     </div>
     <div class="skv pl-only" id="skv" hidden>
     <div class="skv-in">
-      <div class="skv-top"><h2>技能符文配置</h2><span class="skv-src" id="skSrc"></span><span class="sp"></span><button id="skClear">清空技能</button></div>
+      <div class="skv-top"><h2>技能符文配置</h2><span class="skv-stage" id="skStage"></span><span class="skv-src" id="skSrc"></span><span class="sp"></span><select id="skCopy" aria-label="從其他階段複製技能" hidden></select><button id="skClear">清空技能</button></div>
       <div class="skv-stats" aria-label="角色能力" hidden>
         <label>角色等級<input type="number" id="skLv" min="1" step="1" aria-label="角色等級"></label>
         <label>力量<input type="number" id="sk_str" min="0" step="1"></label><label>敏捷<input type="number" id="sk_dex" min="0" step="1"></label>
@@ -1692,7 +1696,7 @@ $('resetBoard').onclick=()=>{
 };
 
 /* ---------- player build save/load ---------- */
-function buildData(){return {type:'lootania-build',boardVersion:board.version||'',boardFile:CUR_FILE||undefined,start:board.startIds.find(x=>alloc.has(x))||null,alloc:[...alloc],picks:[...picks],lastPick,autoPick3:$('autoPick').checked,stages:stages.map(x=>({name:x.name,alloc:x.alloc,picks:x.picks,note:x.note||undefined})),condMode,conds:[...activeConds],note:buildNote||undefined,noteAuto:noteAuto||undefined,skills:skOut(),savedAt:new Date().toISOString()};}
+function buildData(){return {type:'lootania-build',boardVersion:board.version||'',boardFile:CUR_FILE||undefined,start:board.startIds.find(x=>alloc.has(x))||null,alloc:[...alloc],picks:[...picks],lastPick,autoPick3:$('autoPick').checked,stages:stages.map(x=>({name:x.name,alloc:x.alloc,picks:x.picks,note:x.note||undefined,skills:x.skills||undefined})),condMode,conds:[...activeConds],note:buildNote||undefined,noteAuto:noteAuto||undefined,skills:skOut(),savedAt:new Date().toISOString()};}
 /* ---------- board versions (folder + manifest; used by the website build) ---------- */
 let MANIFEST=null, CUR_FILE=null;
 function verEntry(v){return MANIFEST&&MANIFEST.boards.find(b=>b.version===v);}
@@ -1804,14 +1808,14 @@ function skNorm(s){ const o=skBlank(); if(!s||typeof s!=='object') return o;
   if(s.move){ o.move.id=id(s.move.id); o.move.lv=lv(s.move.lv); }
   (Array.isArray(s.rows)?s.rows:[]).slice(0,SK_ROWS).forEach((r,i)=>{ if(!r) return; o.rows[i].id=id(r.id); o.rows[i].lv=lv(r.lv); (Array.isArray(r.runes)?r.runes:[]).slice(0,SK_RUNES).forEach((x,j)=>{ o.rows[i].runes[j]=id(x); }); });
   return o; }
-const skUsed=()=>!!(skCfg.move.id||skCfg.rows.some(r=>r.id||r.runes.some(Boolean))||SK_ATTR.some(([k])=>skCfg.stats[k]!=null)||skCfg.stats.lv!=null||!skCfg.stats.talent||skCfg.eq.g!=null||skCfg.eq.cat||skCfg.eq.thorn!=null);
+const skUsed=(c=skCfg)=>!!(c.move.id||c.rows.some(r=>r.id||r.runes.some(Boolean))||SK_ATTR.some(([k])=>c.stats[k]!=null)||c.stats.lv!=null||!c.stats.talent||c.eq.g!=null||c.eq.cat||c.eq.thorn!=null);
 function skOut(){ return skUsed()?JSON.parse(JSON.stringify(skCfg)):undefined; }
 // 分享碼：技能區塊（接在備註旗標之後，舊版讀取時會略過）
 const skNum=x=>x?parseInt(x.slice(3),10)||0:0, skId=(p,n)=>n?`${p}-${String(n).padStart(4,'0')}`:null;
-function skEncode(a){ const s=skCfg.stats, q=skCfg.eq, hasEq=q.g!=null||q.cat||q.thorn!=null; vPush(a,hasEq?2:1); for(const k of ['lv','str','dex','int','luk']) vPush(a,s[k]==null?0:s[k]+1); vPush(a,s.talent?1:0);
-  vPush(a,skNum(skCfg.move.id)); vPush(a,skCfg.move.lv);
-  let n=SK_ROWS; while(n>0&&!skCfg.rows[n-1].id&&!skCfg.rows[n-1].runes.some(Boolean)) n--; vPush(a,n);
-  for(let i=0;i<n;i++){ const r=skCfg.rows[i]; vPush(a,skNum(r.id)); vPush(a,r.lv); for(let j=0;j<SK_RUNES;j++) vPush(a,skNum(r.runes[j])); }
+function skEncode(a,C=skCfg){ const s=C.stats, q=C.eq, hasEq=q.g!=null||q.cat||q.thorn!=null; vPush(a,hasEq?2:1); for(const k of ['lv','str','dex','int','luk']) vPush(a,s[k]==null?0:s[k]+1); vPush(a,s.talent?1:0);
+  vPush(a,skNum(C.move.id)); vPush(a,C.move.lv);
+  let n=SK_ROWS; while(n>0&&!C.rows[n-1].id&&!C.rows[n-1].runes.some(Boolean)) n--; vPush(a,n);
+  for(let i=0;i<n;i++){ const r=C.rows[i]; vPush(a,skNum(r.id)); vPush(a,r.lv); for(let j=0;j<SK_RUNES;j++) vPush(a,skNum(r.runes[j])); }
   if(hasEq){ vPush(a,q.g==null?0:Math.round(q.g*10)+1); vPush(a,q.cat?1:0); vPush(a,q.thorn==null?0:Math.round(q.thorn*10)+1); } }
 function skDecode(b,p){ const ver=vRead(b,p); if(ver!==1&&ver!==2) return undefined; const o=skBlank();
   for(const k of ['lv','str','dex','int','luk']){ const v=vRead(b,p); o.stats[k]=v?v-1:null; } o.stats.talent=vRead(b,p)===1;
@@ -1905,8 +1909,13 @@ function skEqRender(){ const el=$('skEq'); if(!el) return; if(el.contains(docume
   el.innerHTML=`<b>裝備保留效率</b><label>全域<input type="number" id="skEqG" min="0" max="100" step="0.1" value="${q.g??''}" placeholder="0">%</label><span class="sep"></span>
     <label title="貓眼耳環：會心之眼保留效率 50%"><input type="checkbox" id="skEqCat"${q.cat?' checked':''}>貓眼耳環（會心之眼 50%）</label><span class="sep"></span>
     <label title="白十字鎖甲：【荊棘】保留效率 15~25%">白十字鎖甲【荊棘】<input type="number" id="skEqThorn" min="0" max="100" step="0.1" value="${q.thorn??''}" placeholder="15~25">%</label>`; }
+function skStageRender(){ const lb=$('skStage'), cp=$('skCopy'); if(!lb) return; const t=skStage();
+  lb.className='skv-stage'+(t?' on':''); lb.textContent=t?`階段：${t.name}`:(stages.length?'目前配點未存成階段':'');
+  lb.title=t?'技能、符文、裝備保留效率的修改會自動存進這個階段':'存成階段（或更新階段）時，會連同目前的技能配置一起儲存'; lb.hidden=!lb.textContent;
+  const src=stages.filter(x=>x!==t&&x.skills);
+  cp.hidden=!src.length; if(src.length) cp.innerHTML=`<option value="">從其他階段複製技能…</option>`+src.map(x=>`<option value="${stages.indexOf(x)}">${esc(x.name)}</option>`).join(''); }
 function skRender(){
-  const box=$('skBody'); if(!box) return; skEqRender();
+  const box=$('skBody'); if(!box) return; skEqRender(); skStageRender();
   if(!WK){ box.innerHTML='<div class="sk-empty">讀取技能資料中…</div>'; return; }
   const st=skStats();
   $('skSrc').className='skv-src'+(WK.exact?'':' warn');
@@ -1940,7 +1949,12 @@ function skRender(){
 }
 // 技能頁目前放的增益技能數量（標籤含【增益】，附魔技能也算）；還沒讀到技能資料時回傳 null
 function skBuffCount(){ if(!WK) return null; return [skCfg.move,...skCfg.rows].filter(r=>{ const s=r.id&&WK.byId.get(r.id); return s&&((s.tags||[]).includes('增益')||isEnchantSkill(s)); }).length; }
-function skSet(fn){ fn(); scheduleSave(); skRender(); if(skFocus!=null) skSetFocus(skFocus); else render(); }
+// 技能跟著階段：目前配點剛好是某個階段時，技能／符文／裝備保留效率的修改同步存進那個階段
+const skClone=c=>JSON.parse(JSON.stringify(c));
+const skStage=()=>typeof stages!=='undefined'?stages.find(t=>stSig(t)===curSig())||null:null;
+function skSync(){ const t=skStage(); if(!t) return; if(skUsed()) t.skills=skClone(skCfg); else delete t.skills; }
+function skChanged(){ skSync(); scheduleSave(); }
+function skSet(fn){ fn(); skChanged(); skRender(); if(skFocus!=null) skSetFocus(skFocus); else render(); }
 // ---- 選取技能：右側「加成總計」改用這個技能的條件判定生效／未生效 ----
 let skFocus=null;
 // 讓技能「視為【血魔法】」的來源：天賦「所有非保留技能將獲得【血魔法】標籤」、符文（血法師：全部技能；犧牲血咒：法術、非保留技能）
@@ -2044,6 +2058,9 @@ $('skv').addEventListener('click',ev=>{
   else skOpenPick({type:'skill',where:w});
 });
 $('skv').addEventListener('change',ev=>{
+  if(ev.target.id==='skCopy'){ const t=stages[+ev.target.value]; ev.target.value=''; if(!t||!t.skills) return; const cur=skStage();
+    const go=()=>{ skSet(()=>{ skCfg=skNorm(skClone(t.skills)); }); toast(`已從「${t.name}」複製技能配置${cur?`到「${cur.name}」`:''}`); };
+    if(skUsed()) askConfirm('複製技能配置',`要用 <b>${esc(t.name)}</b> 的技能、符文與裝備保留效率，取代目前${cur?`階段 <b>${esc(cur.name)}</b> `:''}的技能配置嗎？`,'取代','取消',go); else go(); return; }
   if(ev.target.id==='skEqCat'){ skSet(()=>{ skCfg.eq.cat=ev.target.checked; }); return; }
   if(ev.target.id==='skEqG'||ev.target.id==='skEqThorn'){ skEqRender(); return; }
   const sel=ev.target.closest('select[data-lv]'); if(!sel) return; const w=sel.dataset.lv, v=+sel.value;
@@ -2051,10 +2068,10 @@ $('skv').addEventListener('change',ev=>{
 $('skv').addEventListener('input',ev=>{ const el=ev.target;
   if(el.id==='skPickQ'){ skPickList(); return; }
   if(el.id==='skEqG'||el.id==='skEqThorn'){ const v=el.value===''?null:Math.max(0,Math.min(100,Math.round(+el.value*10)/10||0));
-    if(el.id==='skEqG') skCfg.eq.g=v; else skCfg.eq.thorn=v; scheduleSave(); skRender(); if(skFocus!=null) skSetFocus(skFocus); return; }
+    if(el.id==='skEqG') skCfg.eq.g=v; else skCfg.eq.thorn=v; skChanged(); skRender(); if(skFocus!=null) skSetFocus(skFocus); return; }
   const k=el.id==='skLv'?'lv':el.id.startsWith('sk_')?el.id.slice(3):el.id==='skTal'?'talent':null; if(!k) return;
   if(k==='talent') skCfg.stats.talent=el.checked; else skCfg.stats[k]=el.value===''?null:Math.max(0,Math.floor(+el.value||0));
-  scheduleSave(); const f=document.activeElement, pos=f&&f.selectionStart; skRender(); });
+  skChanged(); const f=document.activeElement, pos=f&&f.selectionStart; skRender(); });
 $('skv').addEventListener('keydown',ev=>{ if(ev.key==='Escape'&&!$('skPick').hidden){ ev.stopPropagation(); skClosePick(); }
   if(ev.key==='Enter'&&ev.target.id==='skPickQ'){ const op=$('skPickList').querySelector('.sk-opt:not(:disabled)'); if(op) skChoose(op.dataset.id); } });
 $('skv').addEventListener('mouseover',ev=>{ const a=ev.target.closest('[data-tip]'); if(!a||!WK) return; const h=skTipHTML(a.dataset.tip,a.dataset.ep==='1'); if(!h) return; const t=$('skTipBox'); t.innerHTML=h; t.hidden=false; skTipMove(ev); });
@@ -2163,13 +2180,14 @@ function cleanStages(list){
   for(const t of list){ if(!t||!Array.isArray(t.alloc)) continue;
     let name=String(t.name||'').trim().slice(0,40)||'未命名'; const base=name; let k=2; while(names.has(name)) name=`${base} (${k++})`; names.add(name);
     const o={name,alloc:t.alloc.map(String),picks:(Array.isArray(t.picks)?t.picks:[]).filter(x=>Array.isArray(x)&&x.length===2).map(([id,v])=>[String(id),+v||0])};
-    if(typeof t.note==='string'&&t.note.trim()) o.note=t.note.replace(/\s+$/,'').slice(0,NOTE_MAX); out.push(o); }
+    if(typeof t.note==='string'&&t.note.trim()) o.note=t.note.replace(/\s+$/,'').slice(0,NOTE_MAX);
+    if(t.skills&&typeof t.skills==='object'){ const k=skNorm(t.skills); if(skUsed(k)) o.skills=k; } out.push(o); }
   return out;
 }
 function sigOf(a,p){ const A=[...a].filter(x=>byId.has(x)).sort(); const S=new Set(A); return A.join(',')+'|'+[...p].filter(([id])=>S.has(id)).map(([id,k])=>id+':'+k).sort().join(','); }
 const curSig=()=>sigOf(alloc,picks), stSig=t=>sigOf(t.alloc,t.picks);
 function stDefaultName(){ const n=spent(), L=needLevel(n); return L?`Lv ${L}`:`${n} 點`; }
-function stSnapshot(name,keep){ const o={name,alloc:[...alloc],picks:[...picks].filter(([id])=>alloc.has(id))}; if(keep&&keep.note) o.note=keep.note; return o; }   // keep：覆蓋時沿用原本的階段備註
+function stSnapshot(name,keep){ const o={name,alloc:[...alloc],picks:[...picks].filter(([id])=>alloc.has(id))}; if(keep&&keep.note) o.note=keep.note; if(skUsed()) o.skills=skClone(skCfg); return o; }   // 技能配置也一起存   // keep：覆蓋時沿用原本的階段備註
 function sortStages(){ stages.sort((x,y)=>stPts(x)-stPts(y)); }
 function renderStages(force){
   const box=$('stList'); if(!box) return;
@@ -2183,7 +2201,7 @@ function renderStages(force){
         `<button data-a="upd" title="用目前配點覆蓋這個階段">更新</button><button data-a="ren" title="改名">改名</button><button data-a="del" title="刪除">✕</button></div>`; }).join('');
     const rn=box.querySelector('.st-rn'); if(rn&&document.activeElement!==rn){ rn.focus(); rn.select(); }
   }
-  renderNote();
+  renderNote(); if(skView) skStageRender();
   $('stName').placeholder=`階段名稱（留空＝${hasStart()?stDefaultName():'以等級命名'}）`;
 }
 function saveStage(){
@@ -2203,7 +2221,7 @@ function gotoStage(i){
   const cur=curSig(); if(stSig(t)===cur) return;
   const go=()=>{ const want=t.alloc.filter(x=>!isStart(x)&&byId.has(x)).length;
     pickQueue=[]; pendingBatch=null; $('picker').hidden=true; sel=null;
-    carryBuild(t.alloc,t.picks); render();
+    carryBuild(t.alloc,t.picks); if(t.skills){ skCfg=skNorm(skClone(t.skills)); } else if(skUsed()) t.skills=skClone(skCfg); scheduleSave(); if(skView){ skFocus=null; skFocusSet=null; skFocusName=''; skDmg=null; skConv=null; skRender(); } render();
     const lost=want-spent(); toast(`已切換到「${t.name}」：${spent()} 點${lost>0?`（${lost} 點在目前版本無法對應，已略過）`:''}`); };
   if(spent()&&!stages.some(x=>stSig(x)===cur))
     askConfirm('目前配點尚未存成階段',`切換到 <b>${esc(t.name)}</b> 會取代目前的配點（${spent()} 點），而目前配點沒有存成任何階段。<br><br>要保留的話，請先按「存成階段」。`,'仍要切換','取消',go);
@@ -2273,7 +2291,7 @@ function encodeShare(){
   vPush(a,ids.length); let prev=0; for(const k of ids){ vPush(a,k-prev); prev=k; }
   const pk=[...picks].filter(([id])=>alloc.has(id)).map(([id,k])=>[idNum(id),k]).sort((x,y)=>x[0]-y[0]);
   vPush(a,pk.length); prev=0; for(const [id,k] of pk){ vPush(a,id-prev); prev=id; vPush(a,k); }
-  const stNotes=stages.map((t,i)=>[i,t.note||'']).filter(x=>x[1]); const hasNote=!!buildNote||stNotes.length>0, hasSk=skUsed(), hasCond=condMode||activeConds.size>0||hasNote||hasSk;
+  const stNotes=stages.map((t,i)=>[i,t.note||'']).filter(x=>x[1]); const hasNote=!!buildNote||stNotes.length>0, hasSk=skUsed()||stages.some(t=>t.skills), hasCond=condMode||activeConds.size>0||hasNote||hasSk;
   if(stages.length||hasCond){ vPush(a,stages.length); for(const t of stages){   // optional stage block (older readers ignore it)
     const nm=new TextEncoder().encode(t.name); vPush(a,nm.length); nm.forEach(x=>a.push(x));
     const sst=t.alloc.find(x=>isStart(x)); vPush(a,sst?idNum(sst):0);
@@ -2284,7 +2302,8 @@ function encodeShare(){
   const auto=noteAuto&&hasNote;
   if(stNotes.length||auto||hasSk){ vPush(a,stNotes.length); for(const [i,t] of stNotes){ vPush(a,i); const e=new TextEncoder().encode(t); vPush(a,e.length); e.forEach(x=>a.push(x)); } }   // 各階段備註（舊版會略過）
   if(auto||hasSk) vPush(a,auto?1:0);   // 備註旗標：bit0＝讀取時自動開啟
-  if(hasSk) skEncode(a);   // 技能頁（舊版會略過）
+  if(hasSk){ skEncode(a);   // 技能頁（舊版會略過）
+    const ss=stages.map((t,i)=>[i,t.skills]).filter(x=>x[1]); vPush(a,ss.length); for(const [i,c] of ss){ vPush(a,i); skEncode(a,c); } }   // 各階段技能
   let sum=0; for(const x of a) sum=(sum*31+x)%251; a.push(sum);
   return SH_PREFIX+b64u(a);
 }
@@ -2307,6 +2326,7 @@ function decodeShare(code){
   if(p.i<b.length-1){ const k=vRead(b,p); for(let j=0;j<k;j++){ const i=vRead(b,p), l=vRead(b,p); const t=new TextDecoder().decode(b.slice(p.i,p.i+l)); p.i+=l; if(stL[i]) stL[i].note=t; } }
   let flags=0; if(p.i<b.length-1) flags=vRead(b,p);
   let skills; if(p.i<b.length-1){ try{ skills=skDecode(b,p); }catch(e){ skills=undefined; } }
+  if(skills&&p.i<b.length-1){ try{ const k=vRead(b,p); for(let j=0;j<k;j++){ const i=vRead(b,p), c=skDecode(b,p); if(!c) break; if(stL[i]) stL[i].skills=c; } }catch(e){} }
   return {type:'lootania-build',boardVersion:ver,start:st,alloc:allocL,picks:pk,stages:stL,condMode:cm,conds:cl,note,noteAuto:(flags&1)===1,skills,lastPick,autoPick3:$('autoPick').checked};
 }
 async function copyText(s,okMsg){

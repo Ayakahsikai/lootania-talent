@@ -1399,8 +1399,8 @@
     },
     {
       "id": "n128",
-      "x": 73.79,
-      "y": 61.08,
+      "x": 75,
+      "y": 65.7,
       "kind": "medium",
       "size": 3.5,
       "confidence": "placeholder",
@@ -13652,7 +13652,7 @@
           "unit": "text"
         },
         {
-          "stat": "幸運不再提供迴避綠",
+          "stat": "幸運不再提供迴避率",
           "value": 0,
           "unit": "text"
         }
@@ -24259,7 +24259,7 @@
       ]
     }
   ],
-  "updatedAt": "2026-10-08T06:43:58.168Z",
+  "updatedAt": "2026-10-12T08:00:26.128Z",
   "progression": {
     "maxLevel": 90,
     "perLevel": 1,

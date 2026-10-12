@@ -1386,7 +1386,15 @@ $('nextEmpty').onclick=()=>{
 };
 $('autoPick').onchange=()=>scheduleSave();
 $('ruleConn').onchange=()=>{preview=null;if($('ruleConn').checked&&!board.startIds.length)toast('尚未設定起點，只能從已投節點往外延伸');render();};
-$('clearAll').onclick=()=>{alloc.clear();picks.clear();pickQueue=[];pendingBatch=null;$('picker').hidden=true;render();};
+// 全部重置：清除投點、所有階段、總備註與技能頁，保留選好的起點
+$('clearAll').onclick=()=>{ const st=board.startIds.find(x=>alloc.has(x)), n=spent(), ns=stages.length;
+  const hasNote=!!buildNote, hasSk=skUsed();
+  if(!n&&!ns&&!hasNote&&!hasSk){ toast('目前沒有可重置的內容'); return; }
+  const go=()=>{ alloc.clear(); picks.clear(); if(st) alloc.add(st); pickQueue=[]; pendingBatch=null; $('picker').hidden=true;
+    stages=[]; stEditing=null; buildNote=''; noteAuto=false; noteTab=null; skCfg=skBlank(); skFocus=null; skFocusSet=null; skFocusName=''; skDmg=null; skConv=null; renderNote();
+    scheduleSave(); render(); if(skView) skRender(); toast(`已全部重置${st?'（起點保留）':''}`); };
+  const what=[n?`投點（${n} 點）`:'',ns?`全部 <b>${ns}</b> 個階段（含階段備註與各階段技能）`:'',hasNote?'總備註':'',hasSk?'技能頁（技能、符文、裝備保留效率）':''].filter(Boolean);
+  askConfirm('全部重置',`要清除以下內容嗎？<br>・${what.join('<br>・')}${st?'<br><br>選好的起點會保留。':''}`,'重置','取消',go); };
 $('confirmYes').onclick=()=>{ pendingNo=null; if(pendingAction){const f=pendingAction;pendingAction=null;$('confirm').hidden=true;resetConfirm();f();return;} pendingRemoval?.forEach(x=>{alloc.delete(x);picks.delete(x);});pendingRemoval=null;$('confirm').hidden=true;render();};
 function resetConfirm(){ $('confirmYes').hidden=false; $('confirmYes').textContent='一併移除'; $('confirmNo').textContent='取消'; }
 $('confirmNo').onclick=()=>{ if(alertMode){ alertMode=false; }

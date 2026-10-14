@@ -328,7 +328,7 @@ svg.ic.dim>image[data-faded]{opacity:1}
 .sk-info select{font-size:12px;padding:1px 4px;background:#0c0c0e;border:1px solid var(--line);border-radius:4px;color:var(--fg)}
 .sk-info .rq{font:12px var(--f-mono);color:var(--muted)}.sk-info .rq.no{color:var(--warn)}.sk-info .rq .rs{color:var(--accent)}
 .sk-info .ef{color:#b4b4ff}
-.sk-info .rns{font-size:12px;color:var(--muted)}.sk-info .rns span{color:var(--fg)}.sk-info .rns .bad{color:var(--warn)}
+.sk-info .rns{font-size:12px;color:var(--muted)}.sk-info .rns span{color:var(--fg)}.sk-info .rns .bad{color:var(--warn)}.sk-info .rns.bad{color:var(--warn)}
 .sk-info .hint{color:var(--muted);font-size:12.5px}
 .sk-row,.sk-mv{cursor:pointer}.sk-row.sel,.sk-mv.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
 .buffcalc{display:block;color:var(--accent);font-size:11.5px;font-weight:400}
@@ -1873,7 +1873,11 @@ const SK_TAL_RES_CAP=40, EQ_CAT_SKILL='會心之眼', EQ_CAT_RES=50;   // 貓眼
 // 符文的消耗／保留倍率：有效果文字就照文字（例：技能消耗x1.5、消耗與保留x1.5、改為消耗生命）；
 // 沒有效果資料的符文不計算，只有血魔法類（血法師）在資料補上前先用暫定值
 const RUNE_COST={'血法師':{both:1.5,hp:true}};
-function runeCostMul(rn){ const o={res:1,cost:1,hp:false};
+// 符文效果寫「被輔助的X技能…」時是否作用在這個技能：相容標籤有【全部】就一律作用（例如血法師，攻擊技能也能用）
+function runeScopeOK(rn,sk,scope){ if(!sk||!scope||(rn.compatTags||[]).includes('全部')) return true;
+  const p=compatParse(scope,skKnownTags()); const t=sk.tags||[]; return (p.need||[]).every(x=>t.includes(x))&&!(p.not||[]).some(x=>t.includes(x)); }
+function runeCostMul(rn,sk){ const o={res:1,cost:1,hp:false};
+  const sc=/^被輔助的(\S+?)技能[^。]*改為消耗生命/.exec(rn.effect||''); if(sc&&!runeScopeOK(rn,sk,sc[1])) return o;
   if(!rn.effect){ const k=RUNE_COST[rn.name]; if(k){ if(k.both) o.res=o.cost=k.both; if(k.cost) o.cost=k.cost; if(k.res) o.res=k.res; o.hp=!!k.hp; } return o; }
   const e=runeEff(rn); let m=/消耗與保留\s*[x×]\s*([\d.]+)/.exec(e); if(m){ o.res=o.cost=+m[1]; }
   else { if((m=/保留\s*[x×]\s*([\d.]+)/.exec(e))) o.res=+m[1]; if((m=/消耗\s*[x×]\s*([\d.]+)/.exec(e))) o.cost=+m[1]; }
@@ -1887,30 +1891,54 @@ function skResSpecOK(stat,sk,tags){ const m=/^(.+?)保留效率$/.exec(stat); if
 function skResInfo(sk,r,row){ if(!r) return '';
   const src=String(sk.effect||''), v=r.v||[]; const g=skGranted.slice(); const tags=row?skTagsOf(sk,row):new Set(sk.tags||[]); skGranted=g;
   let mulR=1,mulC=1,hp=false;
-  if(row) for(const id of row.runes||[]){ const rn=id&&WK.byId.get(id); if(!rn) continue; const o=runeCostMul(rn); mulR*=o.res; mulC*=o.cost; if(o.hp&&(o.res!==1||o.cost!==1)) hp=true; }
+  if(row) for(const id of row.runes||[]){ const rn=id&&WK.byId.get(id); if(!rn) continue; const o=runeCostMul(rn,sk); mulR*=o.res; mulC*=o.cost; if(o.hp&&(o.res!==1||o.cost!==1)) hp=true; }
+  let asBuff=null, stack=null;
+  if(row) for(const id of row.runes||[]){ const rn=id&&WK.byId.get(id); if(!rn||!runeFits(rn,sk)) continue; const b=runeAsBuff(rn,sk); if(b!=null) asBuff=b; const st=runeStack(rn); if(st) stack=st; }
   let m=/保留\{(\d+)\}%\s*(MP|HP|EP)?/.exec(src);
-  if(m&&v[+m[1]]!=null){ const base=+v[+m[1]], unit=m[2]||'MP';
+  if(asBuff!=null||(m&&v[+m[1]]!=null)){ const base=asBuff!=null?asBuff:+v[+m[1]], unit=asBuff!=null?'MP':(m[2]||'MP');
     let glob=0,spec=0; try{ for(const t of totals().m.values()){ if(t.text||!t.slots[0]) continue; const val=+t.slots[0].value||0;
       if(t.stat==='保留效率') glob+=val; else if(skResSpecOK(t.stat,sk,tags)) spec+=val; } }catch(e){}
     const eqG=skCfg.eq.g||0, eqS=(skCfg.eq.cat&&sk.name===EQ_CAT_SKILL?EQ_CAT_RES:0)+(skCfg.eq.thorn&&[...tags].includes('荊棘')?skCfg.eq.thorn:0); glob=Math.min(glob,SK_TAL_RES_CAP); spec+=eqS;
     const eff=Math.max(0,base*Math.max(0,1-(eqG+glob)/100)*Math.max(0,1-spec/100)), fin=eff*mulR;
-    if(eff===base&&mulR===1) return '';
+    if(eff===base&&mulR===1&&asBuff==null) return '';
     return `<span class="rs">（保留 ${fmtN(fin)}% ${hp?'HP':unit}）</span>`; }
   m=/消耗(MP|HP|EP)\s*\{(\d+)\}/.exec(src);
-  if(m&&v[+m[2]]!=null&&mulC!==1){ const base=+v[+m[2]], fin=base*mulC;
-    return `<span class="rs">（消耗 ${hp?'HP':m[1]} ${fmtN(fin)}）</span>`; }
+  if(m&&v[+m[2]]!=null&&(mulC!==1||stack)){ const base=+v[+m[2]], fin=base*mulC, u=hp?'HP':m[1];
+    if(stack) return `<span class="rs">（消耗 ${u} ${fmtN(fin)}～${fmtN(fin*(1+stack.n*stack.p/100))}，專注 0～${fmtN(stack.n)} 層）</span>`;
+    return `<span class="rs">（消耗 ${u} ${fmtN(fin)}）</span>`; }
   return ''; }
 const runeEff=r=>r.effect?String(r.effect).replace(/\{(\d+)\}/g,(_,i)=>fmtN((r.values||[])[+i])):'（尚無效果資料）';
-// 符文可放：相容標籤和技能標籤有交集；符文沒填相容標籤（資料未完整）也可放
-// RUNE_STRICT=false：符文資料還沒補完，沒填相容標籤的也能放（排在後面）；全部補完後改成 true，就只列出標籤符合的
-const RUNE_STRICT=false;
-// 相容標籤：一般標籤＝技能有其中任一個；「全部」＝所有技能；「非X」＝技能不能有 X（例如【非保留】）
-function runeMatch(rn,s){ if(!s) return []; const c=rn.compatTags||[], st=s.tags||[];
-  const neg=c.filter(t=>/^非./.test(t)).map(t=>t.slice(1)); if(neg.some(n=>st.includes(n))) return [];
-  if(c.includes('全部')) return ['全部'];
-  const pos=c.filter(t=>t!=='全部'&&!/^非./.test(t)); if(pos.length) return pos.filter(t=>st.includes(t));
-  return neg.length?c.filter(t=>/^非./.test(t)):[]; }
+// 符文可放：相容標籤符合技能標籤（符文資料已補完，只列出相容的；之後有符文沒填相容標籤時也不會出現）
+const RUNE_STRICT=true;
+// 相容標籤寫法（每一項符合任一即可）：
+//   「攻擊」＝技能有攻擊標籤；「近戰單體」「指定範圍」＝同時有這幾個標籤（依標籤清單拆開）
+//   「法術（非保留）」「法術（非引導、非保留）」＝有法術、但不能有括號裡的標籤；「全部」＝所有技能；舊寫法「非X」＝技能不能有 X
+function compatParse(c,known){ let t=String(c||'').trim(); const not=[];
+  const m=/^(.*?)[（(]([^）)]*)[）)]$/.exec(t);
+  if(m){ t=m[1].trim(); for(const x of m[2].split(/[、,，\s]+/)){ const y=x.trim().replace(/^非/,''); if(y) not.push(y); } }
+  if(/^非./.test(t)&&!known.includes(t)) return {neg:t.slice(1)};
+  if(!t||t==='全部') return {all:true,need:[],not};
+  const K=known.filter(k=>k&&!/[（(]/.test(k)&&k!=='全部').sort((a,b)=>b.length-a.length), need=[]; let rest=t;
+  while(rest){ const k=K.find(k=>rest.startsWith(k)); if(!k) return {need:[t],not}; need.push(k); rest=rest.slice(k.length); }
+  return {need,not}; }
+function compatMatch(compat,tags,known){ const T=new Set(tags||[]), ps=(compat||[]).map(c=>[c,compatParse(c,known)]);
+  const negs=ps.filter(([,p])=>p.neg); if(negs.some(([,p])=>T.has(p.neg))) return [];
+  const pos=ps.filter(([,p])=>!p.neg); if(!pos.length) return negs.map(([c])=>c);
+  return pos.filter(([,p])=>p.need.every(x=>T.has(x))&&!p.not.some(x=>T.has(x))).map(([c])=>c); }
+let wkKnown=null;
+const skKnownTags=()=>{ if(!WK) return []; if(wkKnown&&wkKnown.wk===WK) return wkKnown.list;
+  const list=[...new Set([...((WK.meta&&WK.meta.skillTags)||[]).map(t=>t.id),...WK.skills.flatMap(x=>x.tags||[])])]; wkKnown={wk:WK,list}; return list; };
+function runeMatch(rn,s){ if(!s) return []; return compatMatch(rn.compatTags||[],s.tags||[],skKnownTags()); }
 const runeFits=(rn,s)=>runeMatch(rn,s).length>0||(!RUNE_STRICT&&!(rn.compatTags||[]).length);
+// 不可同時串聯：備註「不可與【符文：X】、【符文：Y】同時串聯」，任一邊有寫就算衝突
+const runeBans=rn=>[...String(rn&&rn.note||'').matchAll(/【符文：([^】]+)】/g)].map(m=>m[1]);
+const runeClash=(a,b)=>!!a&&!!b&&a!==b&&(runeBans(a).includes(b.name)||runeBans(b).includes(a.name));
+// 這一列裡和第 j 格衝突的其他符文（skip＝略過的格子，選擇視窗用來排除正要替換的那格）
+function rowClash(row,rn,skip){ return (row.runes||[]).map((id,k)=>k===skip?null:id&&WK.byId.get(id)).filter(x=>x&&runeClash(rn,x)); }
+// 厄咒纏身：「被輔助的詛咒技能變為保留25%魔力的增益技能」
+const runeAsBuff=(rn,sk)=>{ const m=/被輔助的(\S+?)技能變為保留([\d.]+)%魔力的增益技能/.exec(runeEff(rn)); return m&&runeFits(rn,sk)&&runeScopeOK(rn,sk,m[1])?+m[2]:null; };
+// 專注引導：「最多4層，每層…技能消耗+25%」
+const runeStack=rn=>{ const m=/最多([\d.]+)層[^。]*?技能消耗\+([\d.]+)%/.exec(runeEff(rn)); return m?{n:+m[1],p:+m[2]}:null; };
 
 function skEqRender(){ const el=$('skEq'); if(!el) return; if(el.contains(document.activeElement)&&document.activeElement.tagName==='INPUT'&&document.activeElement.type==='number') return;
   const q=skCfg.eq;
@@ -1940,8 +1968,9 @@ function skRender(){
     let ef=pk?effAt(sk,pk.r):''; if(where==='move') ef=toEP(ef);
     const kind=sk.kind==='passive'?'被動':'主動';
     let rn='';
-    if(where!=='move'){ const row=skCfg.rows[+where]; const names=row.runes.map(id=>{ if(!id) return null; const r=WK.byId.get(id); return r?`<span class="${runeFits(r,sk)?'':'bad'}">${esc(r.name)}</span>`:`<span class="bad">${esc(id)}</span>`; }).filter(Boolean);
-      if(names.length) rn=`<div class="rns">符文：${names.join('、')}</div>`; }
+    if(where!=='move'){ const row=skCfg.rows[+where]; const names=row.runes.map((id,j)=>{ if(!id) return null; const r=WK.byId.get(id); return r?`<span class="${runeFits(r,sk)&&!rowClash(row,r,j).length?'':'bad'}">${esc(r.name)}</span>`:`<span class="bad">${esc(id)}</span>`; }).filter(Boolean);
+      const cl=[]; row.runes.forEach((id,j)=>{ const r=id&&WK.byId.get(id); if(!r) return; for(const o of rowClash(row,r,j)){ const k=[r.name,o.name].sort().join('|'); if(!cl.includes(k)) cl.push(k); } });
+      if(names.length) rn=`<div class="rns">符文：${names.join('、')}</div>`+cl.map(k=>{ const [a,b]=k.split('|'); return `<div class="rns bad">「${esc(a)}」不可與「${esc(b)}」同時串聯</div>`; }).join(''); }
     return `<div class="sk-info"><div class="nm"><b>${esc(sk.name)}</b><span class="kd">${kind}</span>${sel}</div>
       ${pk?`<div class="rq${pk.ok?'':' no'}">需求：${reqTxt(pk.r,st)}${pk.ok?'':'　（未達需求）'}${where==='move'?'':skResInfo(sk,pk.r,skCfg.rows[+where])}</div>`:''}
       ${ef?`<div class="ef">${esc(ef)}</div>`:''}${rn}</div>`; };
@@ -1949,14 +1978,15 @@ function skRender(){
   let h=`<div class="sk-mv"><div class="sk-slots">${slot(skCfg.move.id,`data-s="move" ${skCfg.move.id?`data-tip="${skCfg.move.id}" data-ep="1"`:''} aria-label="位移格"`,'main')}</div>
     <div>${info(skCfg.move.id?skCfg.move:null,0,'move')}<div class="note">位移格：僅限放置位移技能，放置在此的位移技能改為消耗 EP 來使用。</div></div></div>`;
   skCfg.rows.forEach((r,i)=>{ const sk=r.id&&WK.byId.get(r.id);
-    const runes=r.runes.map((id,j)=>{ const it=id&&WK.byId.get(id); const bad=it&&sk&&!runeFits(it,sk);
+    const runes=r.runes.map((id,j)=>{ const it=id&&WK.byId.get(id); const bad=it&&sk&&(!runeFits(it,sk)||rowClash(r,it,j).length);
       return `<span class="sk-chain"></span><button class="sk-slot rn${!r.id?' dis':''}${bad?' bad':''}" data-s="${i}" data-r="${j}" ${id?`data-tip="${id}"`:''} aria-label="第 ${i+1} 列符文 ${j+1}"${!r.id?' title="先放入技能"':''}>${it?skIcon(it):(id?'<span class="plus">?</span>':'')}</button>`; }).join('');
     h+=`<div class="sk-row"><div class="sk-slots">${slot(r.id,`data-s="${i}" ${r.id?`data-tip="${r.id}"`:''} aria-label="第 ${i+1} 列技能"`,'main')}${runes}</div>${info(r.id?r:null,0,String(i))}</div>`; });
   box.innerHTML=h;
   if(skFocus!=null){ const el=skFocus==='move'?box.querySelector('.sk-mv'):box.querySelectorAll('.sk-row')[skFocus]; if(el) el.classList.add('sel'); }
 }
 // 技能頁目前放的增益技能數量（標籤含【增益】，附魔技能也算）；還沒讀到技能資料時回傳 null
-function skBuffCount(){ if(!WK) return null; return [skCfg.move,...skCfg.rows].filter(r=>{ const s=r.id&&WK.byId.get(r.id); return s&&((s.tags||[]).includes('增益')||isEnchantSkill(s)); }).length; }
+function skBuffCount(){ if(!WK) return null; return [skCfg.move,...skCfg.rows].filter(r=>{ const s=r.id&&WK.byId.get(r.id); if(!s) return false;
+  if((s.tags||[]).includes('增益')||isEnchantSkill(s)) return true; return r!==skCfg.move&&(r.runes||[]).some(id=>{ const rn=id&&WK.byId.get(id); return rn&&runeAsBuff(rn,s)!=null; }); }).length; }   // 厄咒纏身讓詛咒技能變成增益技能
 // 技能跟著階段：目前配點剛好是某個階段時，技能／符文／裝備保留效率的修改同步存進那個階段
 const skClone=c=>JSON.parse(JSON.stringify(c));
 const skStage=()=>typeof stages!=='undefined'?stages.find(t=>stSig(t)===curSig())||null:null;
@@ -1965,15 +1995,22 @@ function skChanged(){ skSync(); scheduleSave(); }
 function skSet(fn){ fn(); skChanged(); skRender(); if(skFocus!=null) skSetFocus(skFocus); else render(); }
 // ---- 選取技能：右側「加成總計」改用這個技能的條件判定生效／未生效 ----
 let skFocus=null;
-// 讓技能「視為【血魔法】」的來源：天賦「所有非保留技能將獲得【血魔法】標籤」、符文（血法師：全部技能；犧牲血咒：法術、非保留技能）
+// 讓技能「視為【血魔法】」的來源：天賦「所有非保留技能將獲得【血魔法】標籤」、符文效果「被輔助的法術技能視為【血魔法】技能」（血法師、犧牲血咒）
+// 符文效果有寫「被輔助的X技能視為【Y】」就照文字判斷 X；沒有效果資料時才用下面的暫定規則
 const RE_BLOOD_ALL=/所有非保留技能將獲得【血魔法】標籤/;
 const RUNE_GRANT={'血法師':{tag:'血魔法'},'犧牲血咒':{tag:'血魔法',need:['法術'],not:['保留']}};
 let skGranted=[];
 function skTagsOf(sk,row){ const tags=new Set(sk.tags||[]); skGranted=[];
   const add=(tg,src)=>{ if(!tags.has(tg)){ tags.add(tg); } skGranted.push(src+'→【'+tg+'】'); };
   if(row) for(const id of row.runes||[]){ const r=id&&WK.byId.get(id); if(!r) continue;
-    let g=RUNE_GRANT[r.name]; const mm=!g&&/視為【([^】]+)】/.exec(r.effect||''); if(mm) g={tag:mm[1]};
+    if(!runeFits(r,sk)) continue;   // 不相容的符文不給標籤
+    let g=null; const mm=/被輔助的(\S*?)技能視為【([^】]+)】/.exec(r.effect||'') || /視為【([^】]+)】/.exec(r.effect||'');
+    if(runeAsBuff(r,sk)!=null){ add('增益','符文「'+r.name+'」'); add('保留','符文「'+r.name+'」'); }
+    if(mm&&mm.length===3){ const p=compatParse((r.compatTags||[]).includes('全部')?'全部':(mm[1]||'全部'),skKnownTags()); g={tag:mm[2],need:p.need||[],not:p.not||[],all:true}; }
+    else if(mm) g={tag:mm[1]};
+    else g=RUNE_GRANT[r.name];
     if(!g) continue; const base=sk.tags||[];
+    if(g.all&&(g.need||[]).length&&!g.need.every(x=>base.includes(x))) continue;
     if((g.need||[]).length&&!g.need.some(x=>base.includes(x))) continue; if((g.not||[]).some(x=>base.includes(x))) continue;
     add(g.tag,'符文「'+r.name+'」'); }
   if(!(sk.tags||[]).includes('保留')&&[...totals().m.values()].some(r=>RE_BLOOD_ALL.test(r.stat))) add('血魔法','天賦「血魔法」');
@@ -2022,10 +2059,12 @@ function skPickList(){ const c=skPickCtx; if(!c||!WK) return; const q=$('skPickQ
     skCfg.rows[c.where].runes.forEach(id=>id&&used.add(id)); }
   const cur=c.type==='rune'?skCfg.rows[c.where].runes[c.r]:(c.where==='move'?skCfg.move.id:skCfg.rows[c.where].id);
   list=list.filter(hit);
-  $('skPickList').innerHTML=list.length?list.map(x=>{ const dis=used.has(x.id)&&x.id!==cur;
+  const crow=c.type==='rune'?skCfg.rows[c.where]:null;
+  $('skPickList').innerHTML=list.length?list.map(x=>{ const clash=crow?rowClash(crow,x,c.r):[]; const dis=(used.has(x.id)&&x.id!==cur)||clash.length>0;
+    const why=clash.length?`不可與「${clash.map(o=>o.name).join('」、「')}」同時串聯`:'已經放在其他位置';
     const sub=x.kind==='rune'?runeEff(x):((x.tags||[]).map(t=>`【${t}】`).join('')||x.desc||'');
     const mt=x.kind==='rune'?runeMatch(x,WK.byId.get(skCfg.rows[c.where].id)):[];
-    return `<button class="sk-opt${mt.length?' fit':''}" data-id="${x.id}" data-tip="${x.id}"${dis?' disabled title="已經放在其他位置"':''}>${mt.length?`<em class="fit-tag">${mt.map(t=>`【${esc(t)}】`).join('')}</em>`:''}<span class="ic">${skIcon(x)}</span><span><b>${esc(x.name)}${x.id===cur?'（目前）':''}</b><small>${esc(sub)}</small></span></button>`; }).join('')
+    return `<button class="sk-opt${mt.length?' fit':''}" data-id="${x.id}" data-tip="${x.id}"${dis?` disabled title="${esc(why)}"`:''}>${mt.length?`<em class="fit-tag">${mt.map(t=>`【${esc(t)}】`).join('')}</em>`:''}<span class="ic">${skIcon(x)}</span><span><b>${esc(x.name)}${x.id===cur?'（目前）':''}</b><small${clash.length?' style="color:var(--warn)"':''}>${esc(clash.length?why:sub)}</small></span></button>`; }).join('')
     :`<div class="sk-empty">${c.type==='rune'?'沒有可搭配這個技能的符文':'沒有符合的技能'}</div>`;
   $('skPickNote').textContent=c.type==='rune'?(RUNE_STRICT?'只列出相容標籤符合的符文':'相容標籤符合的排在前面（金框）；其餘為尚未填寫相容標籤的符文'):c.where==='move'?'只列出標籤含【位移】的技能':'已放在其他位置的技能不能重複放';
   $('skPickDel').hidden=!cur; }

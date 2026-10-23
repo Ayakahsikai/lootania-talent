@@ -18951,8 +18951,13 @@
       "confidence": "placeholder",
       "modifiers": [
         {
-          "stat": "所有藥水效果",
-          "value": 50,
+          "stat": "HP藥水恢復量",
+          "value": 100,
+          "unit": "percent"
+        },
+        {
+          "stat": "MP藥水恢復量",
+          "value": 100,
           "unit": "percent"
         },
         {

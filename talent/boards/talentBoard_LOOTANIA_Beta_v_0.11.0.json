@@ -10449,7 +10449,7 @@
         {
           "stat": "每秒恢復MP{v}最大MP",
           "value": 1,
-          "unit": "flat"
+          "unit": "percent"
         },
         {
           "stat": "智力",

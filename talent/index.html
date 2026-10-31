@@ -1868,8 +1868,10 @@ const effAt=(s,r)=>String(s.effect||'').replace(/\{(\d+)\}/g,(_,i)=>fmtN((r&&r.v
 const toEP=t=>t.replace(/消耗MP\s*([\d.]+)\s*[(（]\s*位移槽\s*[:：]\s*EP\s*[\d.]+\s*[)）]/g,'消耗EP$1').replace(/消耗MP/g,'消耗EP');
 const reqTxt=(r,st)=>{ const q=r.req||{}, out=[]; const c=(v,have,lbl)=>{ if(!v) return; out.push(`<span${v>have?' style="color:var(--warn)"':''}>${lbl==='Lv.'?'Lv.'+v:lbl+' '+v}</span>`); };
   c(q.level,st.level,'Lv.'); for(const [k,l] of SK_ATTR) c(q[k],st[k],l); return out.join(' | ')||'無需求'; };
-// 保留／消耗：技能保留% ×(100% − 裝備全域保留效率% − 天賦全域保留效率%)×(100% − 特化技能保留效率%)，再乘符文倍率
-const SK_TAL_RES_CAP=40, EQ_CAT_SKILL='會心之眼', EQ_CAT_RES=50;   // 貓眼耳環：會心之眼保留效率 50%；白十字鎖甲：【荊棘】保留效率 15~25%   // 天賦全域保留效率上限 40%
+// 保留：技能保留% × max(0, 1 − 裝備全域保留效率 − 適用天賦效率) × max(0, 1 − 裝備專屬效率)，再乘符文倍率
+//   適用天賦效率 ＝ 天賦全域「保留效率」＋ 適用這個技能的天賦特化效率（例：增益技能保留效率），無上限
+//   裝備專屬效率 ＝ 貓眼耳環（會心之眼 50%）、白十字鎖甲（【荊棘】15~25%）
+const EQ_CAT_SKILL='會心之眼', EQ_CAT_RES=50;   // 貓眼耳環：會心之眼保留效率 50%；白十字鎖甲：【荊棘】保留效率 15~25%
 // 符文的消耗／保留倍率：有效果文字就照文字（例：技能消耗x1.5、消耗與保留x1.5、改為消耗生命）；
 // 沒有效果資料的符文不計算，只有血魔法類（血法師）在資料補上前先用暫定值
 const RUNE_COST={'血法師':{both:1.5,hp:true}};
@@ -1894,12 +1896,13 @@ function skResInfo(sk,r,row){ if(!r) return '';
   if(row) for(const id of row.runes||[]){ const rn=id&&WK.byId.get(id); if(!rn) continue; const o=runeCostMul(rn,sk); mulR*=o.res; mulC*=o.cost; if(o.hp&&(o.res!==1||o.cost!==1)) hp=true; }
   let asBuff=null, stack=null;
   if(row) for(const id of row.runes||[]){ const rn=id&&WK.byId.get(id); if(!rn||!runeFits(rn,sk)) continue; const b=runeAsBuff(rn,sk); if(b!=null) asBuff=b; const st=runeStack(rn); if(st) stack=st; }
-  let m=/保留\{(\d+)\}%\s*(MP|HP|EP)?/.exec(src);
-  if(asBuff!=null||(m&&v[+m[1]]!=null)){ const base=asBuff!=null?asBuff:+v[+m[1]], unit=asBuff!=null?'MP':(m[2]||'MP');
+  // 保留量：「保留{0}% MP」取等級數值；「保留35% MP」這種寫死的也要讀
+  let m=/保留(?:\{(\d+)\}|([\d.]+))%\s*(MP|HP|EP)?/.exec(src); const resBase=m?(m[1]!=null?v[+m[1]]:+m[2]):null;
+  if(asBuff!=null||(m&&resBase!=null)){ const base=asBuff!=null?asBuff:+resBase, unit=asBuff!=null?'MP':(m[3]||'MP');
     let glob=0,spec=0; try{ for(const t of totals().m.values()){ if(t.text||!t.slots[0]) continue; const val=+t.slots[0].value||0;
       if(t.stat==='保留效率') glob+=val; else if(skResSpecOK(t.stat,sk,tags)) spec+=val; } }catch(e){}
-    const eqG=skCfg.eq.g||0, eqS=(skCfg.eq.cat&&sk.name===EQ_CAT_SKILL?EQ_CAT_RES:0)+(skCfg.eq.thorn&&[...tags].includes('荊棘')?skCfg.eq.thorn:0); glob=Math.min(glob,SK_TAL_RES_CAP); spec+=eqS;
-    const eff=Math.max(0,base*Math.max(0,1-(eqG+glob)/100)*Math.max(0,1-spec/100)), fin=eff*mulR;
+    const eqG=skCfg.eq.g||0, eqS=(skCfg.eq.cat&&sk.name===EQ_CAT_SKILL?EQ_CAT_RES:0)+(skCfg.eq.thorn&&[...tags].includes('荊棘')?skCfg.eq.thorn:0); const tal=glob+spec;   // 適用天賦效率（全域＋特化，無上限）
+    const eff=Math.max(0,base*Math.max(0,1-(eqG+tal)/100)*Math.max(0,1-eqS/100)), fin=eff*mulR;
     if(eff===base&&mulR===1&&asBuff==null) return '';
     return `<span class="rs">（保留 ${fmtN(fin)}% ${hp?'HP':unit}）</span>`; }
   m=/消耗(MP|HP|EP)\s*\{(\d+)\}/.exec(src);

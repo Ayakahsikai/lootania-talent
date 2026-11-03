@@ -1707,13 +1707,16 @@ $('resetBoard').onclick=()=>{
 function buildData(){return {type:'lootania-build',boardVersion:board.version||'',boardFile:CUR_FILE||undefined,start:board.startIds.find(x=>alloc.has(x))||null,alloc:[...alloc],picks:[...picks],lastPick,autoPick3:$('autoPick').checked,stages:stages.map(x=>({name:x.name,alloc:x.alloc,picks:x.picks,note:x.note||undefined,skills:x.skills||undefined})),condMode,conds:[...activeConds],note:buildNote||undefined,noteAuto:noteAuto||undefined,skills:skOut(),savedAt:new Date().toISOString()};}
 /* ---------- board versions (folder + manifest; used by the website build) ---------- */
 let MANIFEST=null, CUR_FILE=null;
-function verEntry(v){return MANIFEST&&MANIFEST.boards.find(b=>b.version===v);}
-function latestVer(){return MANIFEST?(MANIFEST.latest||MANIFEST.boards[0]?.version):board.version;}
-function isLatest(v){return !MANIFEST||v===latestVer();}
+// 版本別名：內容沒變、只是遊戲版本號更新時，在 boards/index.json 的那筆加上 "aliases"，舊版本號的流派／分享碼直接對應到這筆
+function verEntry(v){return MANIFEST&&MANIFEST.boards.find(b=>b.version===v||(b.aliases||[]).includes(v));}
+const canonVer=v=>{ const e=verEntry(v); return e?e.version:(v||''); };
+const sameVer=(a,b)=>canonVer(a)===canonVer(b);
+function latestVer(){return MANIFEST?canonVer(MANIFEST.latest||MANIFEST.boards[0]?.version):board.version;}
+function isLatest(v){return !MANIFEST||canonVer(v)===latestVer();}
 function renderVerSel(){
   if(!MANIFEST){ $('verPick').hidden=true; return; }
   $('verPick').hidden=false; $('verLine').hidden=true;
-  $('verSel').innerHTML=MANIFEST.boards.map(b=>`<option value="${esc(b.version)}">${esc(b.version)}${b.version===latestVer()?'（最新）':''}</option>`).join('');
+  $('verSel').innerHTML=MANIFEST.boards.map(b=>`<option value="${esc(b.version)}" title="${(b.aliases||[]).length?esc('內容同 '+b.aliases.join('、')):''}">${esc(b.version)}${b.version===latestVer()?'（最新）':''}</option>`).join('');
   $('verSel').value=board.version||'';
 }
 async function fetchBoard(entry,label){
@@ -1752,11 +1755,11 @@ function useBoard(data,file,keep){
 }
 async function switchVersion(v,keep){
   const e=verEntry(v); if(!e) throw new Error(`找不到版本 ${v}`);
-  try{ const data=await fetchBoard(e,`切換到 ${e.version}`); ldStep('建立盤面',`${(data.nodes||[]).length} 個節點`,null); await ldTick(); return useBoard(data,e.file,keep); }
+  try{ const data=await fetchBoard(e,`切換到 ${e.version}`); data.version=e.version; ldStep('建立盤面',`${(data.nodes||[]).length} 個節點`,null); await ldTick(); return useBoard(data,e.file,keep); }
   finally{ ldHide(); }
 }
 $('verSel').onchange=async ev=>{
-  const v=ev.target.value; if(v===board.version) return;
+  const v=ev.target.value; if(sameVer(v,board.version)) return;
   try{ const had=spent(); const lost=await switchVersion(v,true); scheduleSave();
     toast(had?`已切換到 ${v}，保留 ${spent()} 點${lost?`，${lost} 點無法對應已移除`:''}`:`已切換到 ${v}`);
   }catch(e){ toast('切換失敗：'+e.message); ev.target.value=board.version||''; }
@@ -1764,8 +1767,8 @@ $('verSel').onchange=async ev=>{
 async function openBuild(s){
   if(!s||!Array.isArray(s.alloc)) throw new Error('不是配點檔案');
   const v=s.boardVersion||'';
-  if(MANIFEST&&v&&v!==board.version){
-    if(verEntry(v)) await switchVersion(v,false);
+  if(MANIFEST&&v&&!sameVer(v,board.version)){
+    if(verEntry(v)) await switchVersion(verEntry(v).version,false);
     else { applyBuild(s); showAlert('找不到對應版本',`這份流派是在 <b>${esc(v)}</b> 建立，網站上已沒有這個版本，已改用目前的 <b>${esc(board.version||'')}</b> 讀取，部分天賦可能無法對應。`); return; }
   }
   applyBuild(s,true);
@@ -1786,7 +1789,7 @@ function applyBuild(s,quiet){
   // 流派有技能配置時，背景先讀技能資料，讓「增益技能數」等計算在天賦畫面也能顯示
   if(PLAYER&&skUsed()) setTimeout(()=>loadWiki().then(()=>{ render(); if(skView) skRender(); }).catch(()=>{}),0);
   render();
-  const warn=(s.boardVersion&&s.boardVersion!==(board.version||''))?`（此配點是在 ${s.boardVersion} 建立，目前是 ${board.version||'未標版本'}）`:'';
+  const warn=(s.boardVersion&&!sameVer(s.boardVersion,board.version||''))?`（此配點是在 ${s.boardVersion} 建立，目前是 ${board.version||'未標版本'}）`:'';
   if(spent()>capPts()) setTimeout(()=>toast(`這份配點共 ${spent()} 點，超過上限 ${capPts()} 點`),0);
   if(!quiet||warn||miss.length) toast(`已讀取配點：${spent()} 點${miss.length?`，${miss.length} 個節點已不存在`:''}${warn}`);
 }
@@ -1838,7 +1841,7 @@ async function loadWiki(){
   const want=board.version||''; if(WK&&wkFor===want) return WK; if(wkLoading&&wkFor===want) return wkLoading;
   wkFor=want; WK=null;
   wkLoading=(async()=>{ const V=await wkFetch('data/versions.json'); const vs=V.versions||[];
-    const hit=vs.find(v=>v.version===want), use=hit||vs.find(v=>v.version===V.latest)||vs[0]; if(!use) throw new Error('Wiki 沒有任何資料版本');
+    const al=(verEntry(want)||{}).aliases||[], hit=vs.find(v=>v.version===want)||vs.find(v=>al.includes(v.version)), use=hit||vs.find(v=>v.version===V.latest)||vs[0]; if(!use) throw new Error('Wiki 沒有任何資料版本');
     const [sk,rn]=await Promise.all([wkFetch(`data/${use.dir}/skills.json`),wkFetch(`data/${use.dir}/runes.json`)]);
     const sheet=(d,def)=>d.iconSheet?{src:/^data:/.test(d.iconSheet.file||'')?d.iconSheet.file:WIKI_BASE+`data/${use.dir}/`+(d.iconSheet.file||def),cols:d.iconSheet.cols,rows:Math.max(1,d.iconSheet.rows||1)}:null;
     WK={ver:use.version,exact:!!hit,skills:(sk.skills||[]).filter(s=>s.kind!=='rune'),runes:rn.runes||[],sSheet:sheet(sk,'skill-icons.png'),rSheet:sheet(rn,'rune-icons.png'),meta:sk.meta||{}};
@@ -2558,11 +2561,11 @@ async function boot(){
     MANIFEST=await r.json(); MANIFEST.base='boards/'; if(!MANIFEST.boards||!MANIFEST.boards.length) throw new Error('boards/index.json 裡沒有任何版本'); }
   catch(e){ fail(e.message||e); return; }
   let s=null; try{ s=JSON.parse(localStorage.getItem(LS_B)||'null'); }catch(e){}
-  const v=(s&&s.boardVersion&&verEntry(s.boardVersion))?s.boardVersion:latestVer();
-  try{ const data=await fetchBoard(verEntry(v)); ldStep('建立盤面',`${v} · ${(data.nodes||[]).length} 個節點`,null); await ldTick(); useBoard(data,verEntry(v).file,false); }catch(e){ fail(e.message||e); return; }
-  if(s&&s.boardVersion===board.version) ldStep('讀取上次的流派',`${(s.alloc||[]).length} 個節點`,null);
+  const v=(s&&s.boardVersion&&verEntry(s.boardVersion))?canonVer(s.boardVersion):latestVer();
+  try{ const data=await fetchBoard(verEntry(v)); data.version=verEntry(v).version; ldStep('建立盤面',`${v} · ${(data.nodes||[]).length} 個節點`,null); await ldTick(); useBoard(data,verEntry(v).file,false); }catch(e){ fail(e.message||e); return; }
+  if(s&&sameVer(s.boardVersion,board.version)) ldStep('讀取上次的流派',`${(s.alloc||[]).length} 個節點`,null);
   setTool('select'); setMode('play');
-  if(s&&s.boardVersion===board.version){ try{ applyBuild(s,true); }catch(e){} }
+  if(s&&sameVer(s.boardVersion,board.version)){ try{ applyBuild(s,true); }catch(e){} }
   if(/^LT[12]/.test(location.hash.slice(1))||new URLSearchParams(location.search).has('s')) ldStep('讀取分享碼','',null);
   if(await loadShareFromUrl()) { render(); ldHide(); updFileState(); return; }
   render(); ldHide(); updFileState();

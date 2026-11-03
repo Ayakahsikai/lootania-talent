@@ -1,5 +1,5 @@
 {
-  "latest": "LOOTANIA Beta v 0.11.0",
+  "latest": "LOOTANIA Beta v 0.11.5",
   "boards": [
     {
       "version": "LOOTANIA Beta v 0.9.2",
@@ -37,9 +37,10 @@
       "note": "v 0.10.5"
     },
     {
-      "version": "LOOTANIA Beta v 0.11.0",
+      "version": "LOOTANIA Beta v 0.11.5",
       "file": "talentBoard_LOOTANIA_Beta_v_0.11.0.json",
-      "note": "v 0.11.0"
+      "note": "v 0.11.5",
+      "aliases": ["LOOTANIA Beta v 0.11.0", "LOOTANIA Beta v 0.11.1", "LOOTANIA Beta v 0.11.2", "LOOTANIA Beta v 0.11.3", "LOOTANIA Beta v 0.11.4"]
     }
   ]
 }

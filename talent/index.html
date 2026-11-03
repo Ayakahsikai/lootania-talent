@@ -1841,7 +1841,8 @@ async function loadWiki(){
   const want=board.version||''; if(WK&&wkFor===want) return WK; if(wkLoading&&wkFor===want) return wkLoading;
   wkFor=want; WK=null;
   wkLoading=(async()=>{ const V=await wkFetch('data/versions.json'); const vs=V.versions||[];
-    const al=(verEntry(want)||{}).aliases||[], hit=vs.find(v=>v.version===want)||vs.find(v=>al.includes(v.version)), use=hit||vs.find(v=>v.version===V.latest)||vs[0]; if(!use) throw new Error('Wiki 沒有任何資料版本');
+    // 同名版本 → Wiki 那筆的 aliases 有這個版本 → 天賦盤別名對應的 Wiki 版本 → 否則 latest
+    const al=[want,...((verEntry(want)||{}).aliases||[])], hit=vs.find(v=>v.version===want)||vs.find(v=>al.some(a=>v.version===a||(v.aliases||[]).includes(a))), use=hit||vs.find(v=>v.version===V.latest||(v.aliases||[]).includes(V.latest))||vs[0]; if(!use) throw new Error('Wiki 沒有任何資料版本');
     const [sk,rn]=await Promise.all([wkFetch(`data/${use.dir}/skills.json`),wkFetch(`data/${use.dir}/runes.json`)]);
     const sheet=(d,def)=>d.iconSheet?{src:/^data:/.test(d.iconSheet.file||'')?d.iconSheet.file:WIKI_BASE+`data/${use.dir}/`+(d.iconSheet.file||def),cols:d.iconSheet.cols,rows:Math.max(1,d.iconSheet.rows||1)}:null;
     WK={ver:use.version,exact:!!hit,skills:(sk.skills||[]).filter(s=>s.kind!=='rune'),runes:rn.runes||[],sSheet:sheet(sk,'skill-icons.png'),rSheet:sheet(rn,'rune-icons.png'),meta:sk.meta||{}};

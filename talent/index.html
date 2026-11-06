@@ -456,6 +456,7 @@ svg.ic.dim>image[data-faded]{opacity:1}
       <h1>天賦模擬</h1>
       <p class="sub" id="verLine"></p>
       <label class="fld" id="verPick" hidden style="margin-top:8px">天賦版本<select id="verSel" aria-label="天賦版本"></select></label>
+      <label class="fld lang-fld" data-noi18n style="margin-top:8px"><span>🌐 語言 / Language</span><select id="langSel" aria-label="語言 / Language"><option value="zh">繁體中文</option><option value="ko">한국어</option><option value="en">English</option></select></label>
       <div class="vtab pl-only" role="group" aria-label="切換畫面" style="margin-top:10px"><button id="vtTalent" aria-pressed="true">天賦</button><button id="vtSkill" aria-pressed="false">技能</button></div>
       <p class="sub" id="stats"></p>
     </div>
@@ -629,7 +630,85 @@ svg.ic.dim>image[data-faded]{opacity:1}
 </div>
 
 <script>
+/* ---------- 語言切換（繁體中文／한국어／English）----------
+   和 Wiki 共用同一套做法：原文一律是中文，選其他語言時讀
+     1. Wiki 的 data/i18n/<語言>.js（技能、符文名稱與效果，Wiki 和這裡共用）
+     2. 這裡的 i18n/<語言>.js（天賦節點名稱、加成、介面文字）
+   顯示時翻譯；計算、分享碼、流派檔案一律用中文原文，換語言不影響配點。 */
+window.I18N = (() => {
+  // 語言記錄的 key 和 Wiki 相同（同一個網域），兩邊共用語言選擇
+  const KEY = 'lootania-wiki-lang', LANGS = ['zh', 'ko', 'en'], HAN = /[㐀-鿿]/;
+  const SEP = /([\s、，,。:：;；\/|（）()【】「」\[\]<>›‹~～=…!！?？·・+*%\-–—]+)/;
+  const stored = () => { try { const v = localStorage.getItem(KEY); return LANGS.includes(v) ? v : null; } catch (e) { return null; } };
+  // 預設：記住的選擇 → 瀏覽器語言是韓文就用韓文 → 中文（英文瀏覽器不自動切換，避免英文系統的中文玩家被改成英文）
+  const auto = () => stored() || (/^ko\b/i.test(navigator.language || '') ? 'ko' : 'zh');
+  let lang = 'zh';
+  try { const q = new URLSearchParams(location.search).get('lang'); lang = LANGS.includes(q) ? q : auto(); } catch (e) { lang = auto(); }
+  let D = new Map(), P = [], PU = null, EP = [], ready = lang === 'zh';
+  const cache = new Map();
+  function load(pack) {
+    if (!pack) { lang = 'zh'; ready = true; return false; }
+    D = new Map([...Object.entries(pack.data || {}), ...Object.entries(pack.ui || {})]);
+    P = (pack.patterns || []).map(([re, to]) => { try { return [new RegExp(re), to]; } catch (e) { return null; } }).filter(Boolean);
+    const pu = pack.punct || {}; PU = Object.keys(pu).length ? [new RegExp('[' + Object.keys(pu).join('').replace(/[\]\\^-]/g, '\\$&') + ']', 'g'), pu] : null;   // 逐詞翻譯時的中文標點（、→ , ）
+    EP = (pack.ep || []).map(([re, to]) => { try { return [new RegExp(re, 'g'), to]; } catch (e) { return null; } }).filter(Boolean);
+    cache.clear(); ready = true; return true;
+  }
+  // 翻譯順序：完全相同 → 組合句 → 多行逐行 → 依標點切開逐詞（所有中文詞都有翻譯才換，避免半中半韓）
+  function core(t, depth) {
+    if (D.has(t)) return D.get(t);
+    if (depth < 3) for (const [re, to] of P) { const m = re.exec(t); if (m) return to.replace(/\$(T?)(\d)/g, (_, T, i) => { const g = (m[+i] || '').trim(); return T ? (HAN.test(g) ? (core(g, depth + 1) ?? g) : g) : g; }); }
+    // 【標籤】「名稱」：括號內整段有翻譯就先換掉（例如【法術（非保留）】）
+    if (/[【「]/.test(t)) { const t2 = t.replace(/([【「])([^】」]+)([】」])/g, (m, a, x, b) => D.has(x) ? a + D.get(x) + b : m);
+      if (t2 !== t) return HAN.test(t2) ? core(t2, depth + 1) : t2; }
+    if (t.includes('\n')) { const ls = t.split('\n').map(l => !HAN.test(l) ? l : core(l.trim(), depth + 1)); return ls.every(x => x != null) ? ls.join('\n') : null; }
+    const parts = t.split(SEP); let ok = true, any = false;
+    const res = parts.map((x, i) => { if (i % 2) return PU ? x.replace(PU[0], c => PU[1][c]) : x; if (!x || !HAN.test(x)) return x; const v = D.get(x); if (v == null) { ok = false; return x; } any = true; return v; });
+    return ok && any ? res.join('') : null;
+  }
+  function tr(s) {
+    if (lang === 'zh' || s == null) return s;
+    const str = String(s); if (!HAN.test(str)) return str;
+    if (cache.has(str)) return cache.get(str);
+    const lead = /^\s*/.exec(str)[0], trail = /\s*$/.exec(str)[0], c = str.trim();
+    const out = core(c, 0), r = out == null ? str : lead + out + trail;
+    if (cache.size > 20000) cache.clear(); cache.set(str, r); return r;
+  }
+  // 畫面上的中文（介面文字）：文字節點與 placeholder／title／aria-label／alt；編輯器、感謝名單名字不翻
+  const SKIP = 'script,style,textarea,svg,.st-go b,[data-noi18n]', ATTRS = ['placeholder', 'title', 'aria-label', 'alt'];
+  const txt = n => { const p = n.parentElement, v = n.nodeValue; if (!p || !HAN.test(v) || p.closest(SKIP)) return; const t = tr(v); if (t !== v) n.nodeValue = t; };
+  const SKIP_ATT = SKIP.replace('textarea,', '');   // textarea 的內容不翻，但 placeholder 要翻
+  const att = e => { if (!e.getAttribute || e.closest(SKIP_ATT)) return; for (const a of ATTRS) { const v = e.getAttribute(a); if (v && HAN.test(v)) { const t = tr(v); if (t !== v) e.setAttribute(a, t); } } };
+  function walk(root) {
+    if (root.nodeType === 3) return txt(root); if (root.nodeType !== 1) return;
+    if (root.closest && root.closest('svg')) return;   // 天賦盤 SVG（上千個節點）沒有文字，略過以免拖慢畫面
+    att(root); const w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT); let n;
+    while ((n = w.nextNode())) n.nodeType === 3 ? txt(n) : att(n);
+  }
+  let started = false;
+  function start() {
+    if (lang === 'zh' || started) return; started = true;
+    document.documentElement.lang = lang; walk(document.documentElement);
+    new MutationObserver(ms => { for (const m of ms) {
+      if (m.type === 'childList') m.addedNodes.forEach(walk); else if (m.type === 'characterData') txt(m.target); else att(m.target); } })
+      .observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+  }
+  // 切換語言：記住選擇並重新載入（網址 ?lang= 只在和預設不同時保留）
+  function set(v) {
+    if (!LANGS.includes(v)) return;
+    try { localStorage.setItem(KEY, v); } catch (e) {}
+    const u = new URL(location.href); if (v === auto() && stored() === v) u.searchParams.delete('lang'); else u.searchParams.set('lang', v);
+    if (u.href === location.href) location.reload(); else location.replace(u.href);   // 網址沒變（只差語言記錄）也要重新載入
+  }
+  // 位移格：譯文的「消耗 MP（位移槽…）」改成「消耗 EP」（規則在語言檔 ep）
+  const ep = t => { let r = String(t); for (const [re, to] of EP) r = r.replace(re, to); return r; };
+  return { get lang() { return lang; }, get ready() { return ready; }, tr, load, start, set, walk, ep };
+})();
+
+</script>
+<script>
 const PLAYER = true;
+const T = s => I18N.tr(s), KO = () => I18N.lang !== 'zh';
 /* ---------- 載入狀態：顯示目前在讀取什麼 ---------- */
 function ldStep(step,sub,pct){ const L=document.getElementById('loading'); if(!L) return; L.hidden=false; L.classList.remove('out'); document.documentElement.classList.add('is-loading');
   document.getElementById('ldStep').textContent=step; document.getElementById('ldSub').textContent=sub||'';
@@ -860,7 +939,8 @@ const UNITS=[['flat','+點'],['percent','+%'],['num','數字'],['numpct','數字
 function fmtVal(v,unit){ if(unit==='text') return ''; v=+(+v).toFixed(2); const sign=(unit==='flat'||unit==='percent'||!unit)&&v>=0?'+':''; return `${sign}${v}${unit==='percent'||unit==='numpct'?'%':''}`; }
 function phCount(s){return Math.max(0,(s||'').split('{v}').length-1);}
 function slotsOf(m){const n=Math.max(1,phCount(m.stat));const ex=m.extra||[];const out=[{value:m.value,unit:m.unit||'flat'}];for(let j=1;j<n;j++) out.push(ex[j-1]||{value:0,unit:'flat'});return out;}
-function fillStat(stat,slots){const s=stat||'（未命名）'; if(slots[0].unit==='text') return s.split('{v}').join('');
+function fillStat(stat,slots){const s=T(stat||'（未命名）');   // 先翻譯文字再代入數值（{v} 位置不變）
+  if(slots[0].unit==='text') return s.split('{v}').join('');
   if(!s.includes('{v}')) return `${s} ${fmtVal(slots[0].value,slots[0].unit)}`;
   let j=0; return s.replace(/\{v\}/g,()=>{const x=slots[Math.min(j++,slots.length-1)];return fmtVal(x.value,x.unit);}); }
 function fmtStat(stat,v,unit){return fillStat(stat,[{value:v,unit}]);}
@@ -1218,8 +1298,8 @@ function renderTotals(){
   for(const r of all){ r.cls=statClass(r.stat); r.off=condOn()&&(!statCondOK(r.stat,r.cls.conds)||kindOff(r.stat)||typeOff(r.stat)); if(r.off) offN++;
     const g=r.off?'off':r.cls.cat; if(!grp.has(g)) grp.set(g,[]); grp.get(g).push(r); }
   const rowHTML=r=>{
-    if(r.text) return `<dt class="fx">${esc(r.stat.split('{v}').join(''))}</dt><dd>${r.count>1?'×'+r.count:''}</dd>`;
-    if(r.stat.includes('{v}')){const parts=r.stat.split('{v}');let h='';parts.forEach((p,j)=>{h+=esc(p);if(j<parts.length-1){const x=r.slots[Math.min(j,r.slots.length-1)];h+=`<b class="tv">${fmtVal(x.value,x.unit)}</b>`;}});
+    if(r.text) return `<dt class="fx">${esc(T(r.stat).split('{v}').join(''))}</dt><dd>${r.count>1?'×'+r.count:''}</dd>`;
+    if(r.stat.includes('{v}')){const parts=T(r.stat).split('{v}');let h='';parts.forEach((p,j)=>{h+=esc(p);if(j<parts.length-1){const x=r.slots[Math.min(j,r.slots.length-1)];h+=`<b class="tv">${fmtVal(x.value,x.unit)}</b>`;}});
       // 「每啟用 N 種增益技能，獲得…」：依技能頁目前放的增益技能數量換算
       if(RE_BUFF_CNT.test(r.stat)&&r.slots.length>=2&&typeof skBuffCount==='function'){ const n=skBuffCount(); if(n!=null){ const per=+r.slots[0].value||1, x=r.slots[r.slots.length-1];
         h+=`<small class="buffcalc">（目前增益技能 ${n} 種 → ${fmtVal(Math.floor(n/per)*x.value,x.unit)}）</small>`; } }
@@ -1228,8 +1308,8 @@ function renderTotals(){
       if(am&&PLAYER&&r.slots.length>=2&&typeof skStats==='function'){ const key={'力量':'str','敏捷':'dex','智力':'int','幸運':'luk'}[am[1]], have=skStats()[key], per=+r.slots[0].value||1, x=r.slots[1];
         h+=`<small class="buffcalc">（目前${am[1]} ${have} → ${fmtVal(Math.floor(have/per)*x.value,x.unit)}）</small>`; }
       return `<dt>${h}</dt><dd></dd>`;}
-    if(isAttr(r)) return `<dt class="attr">${esc(r.stat)}</dt><dd class="attr">${fmtVal(r.slots[0].value,r.slots[0].unit)}</dd>`;
-    return `<dt>${esc(r.stat)}</dt><dd>${fmtVal(r.slots[0].value,r.slots[0].unit)}</dd>`; };
+    if(isAttr(r)) return `<dt class="attr">${esc(T(r.stat))}</dt><dd class="attr">${fmtVal(r.slots[0].value,r.slots[0].unit)}</dd>`;
+    return `<dt>${esc(T(r.stat))}</dt><dd>${fmtVal(r.slots[0].value,r.slots[0].unit)}</dd>`; };
   const withConds=(html,r)=>{ html=html.replace('</dt>',condChips(r.cls.conds)+'</dt>'); if(r.off) html=html.replace('<dt ','<dt data-off ').replace('<dd ','<dd data-off '); return html; };
   let h='';
   for(const g of [...CAT_ORDER,'off']){ const rs=grp.get(g); if(!rs) continue;
@@ -1719,20 +1799,35 @@ function renderVerSel(){
   $('verSel').innerHTML=MANIFEST.boards.map(b=>`<option value="${esc(b.version)}" title="${(b.aliases||[]).length?esc('內容同 '+b.aliases.join('、')):''}">${esc(b.version)}${b.version===latestVer()?'（最新）':''}</option>`).join('');
   $('verSel').value=board.version||'';
 }
-async function fetchBoard(entry,label){
-  const name=label||`下載天賦盤 ${entry.version}`; ldStep(name,entry.file);
-  const r=await fetch(MANIFEST.base+entry.file,{cache:'no-cache'}); if(!r.ok) throw new Error(`${entry.file}：HTTP ${r.status}`);
-  // 有壓縮時 Content-Length 是壓縮後大小，無法換算百分比，只顯示已下載量
-  const total=+r.headers.get('content-length')||0, enc=r.headers.get('content-encoding');
-  let text;
-  if(r.body&&r.body.getReader){ const rd=r.body.getReader(), dec=new TextDecoder(); let got=0, parts=[], last=0;
-    for(;;){ const {done,value}=await rd.read(); if(done) break; got+=value.length; parts.push(dec.decode(value,{stream:true}));
-      const now=performance.now(); if(now-last>80){ last=now; ldStep(name,`${entry.file} · ${fmtKB(got)}${total&&!enc?' / '+fmtKB(total):''}`,total&&!enc?got/total*100:null); } }
-    parts.push(dec.decode()); text=parts.join(''); }
-  else text=await r.text();
-  ldStep('解析天賦盤資料',`${entry.file} · ${fmtKB(text.length)}`,null); await ldTick();
-  try{ return JSON.parse(text); }catch(e){ throw new Error(`${entry.file} 不是正確的 JSON：${e.message}`); }
+// 下載天賦盤：同一個檔案只下載一次（開頁時會先在背景下載最新版，之後直接沿用）；
+// 15 秒內完全沒收到資料就中止並顯示錯誤，避免網路卡住時一直停在載入畫面
+const BOARD_CACHE=new Map();
+function fetchBoard(entry,label,quiet){
+  const key=entry.file; if(BOARD_CACHE.has(key)){ const p=BOARD_CACHE.get(key); if(!quiet) ldStep(label||`下載天賦盤 ${entry.version}`,entry.file,null); return p.then(d=>JSON.parse(JSON.stringify(d))); }
+  // 卡住（15 秒沒收到資料）時自動重試一次，第二次略過瀏覽器快取直接向伺服器下載（剛更新版本時 CDN 偶爾會卡住）
+  const p=fetchBoardNet(entry,label,quiet).catch(e=>{ if(!/逾時/.test(e.message||'')) throw e; return fetchBoardNet(entry,(label||`下載天賦盤 ${entry.version}`)+'（重試）',quiet,true); }); BOARD_CACHE.set(key,p); p.catch(()=>BOARD_CACHE.delete(key));
+  return p.then(d=>JSON.parse(JSON.stringify(d)));
 }
+async function fetchBoardNet(entry,label,quiet,retry){
+  const name=label||`下載天賦盤 ${entry.version}`, show=(sub,pct)=>{ if(!quiet||BOARD_SHOW.has(entry.file)) ldStep(name,sub,pct); };
+  show(entry.file,null);
+  const ac=typeof AbortController!=='undefined'?new AbortController():null; let tm=null; const arm=()=>{ if(!ac) return; clearTimeout(tm); tm=setTimeout(()=>ac.abort(),15000); };
+  try{
+    arm(); const r=await fetch(MANIFEST.base+entry.file+(retry?(entry.file.includes('?')?'&':'?')+'r='+Date.now():''),{cache:retry?'reload':'no-cache',signal:ac?ac.signal:undefined}); if(!r.ok) throw new Error(`${entry.file}：HTTP ${r.status}`);
+    // 有壓縮時 Content-Length 是壓縮後大小，無法換算百分比，只顯示已下載量
+    const total=+r.headers.get('content-length')||0, enc=r.headers.get('content-encoding');
+    let text;
+    if(r.body&&r.body.getReader){ const rd=r.body.getReader(), dec=new TextDecoder(); let got=0, parts=[], last=0;
+      for(;;){ arm(); const {done,value}=await rd.read(); if(done) break; got+=value.length; parts.push(dec.decode(value,{stream:true}));
+        const now=performance.now(); if(now-last>80){ last=now; show(`${entry.file} · ${fmtKB(got)}${total&&!enc?' / '+fmtKB(total):''}`,total&&!enc?got/total*100:null); } }
+      parts.push(dec.decode()); text=parts.join(''); }
+    else text=await r.text();
+    clearTimeout(tm);
+    show(`解析 ${entry.file} · ${fmtKB(text.length)}`,null); await ldTick();
+    try{ return JSON.parse(text); }catch(e){ throw new Error(`${entry.file} 不是正確的 JSON：${e.message}`); }
+  }catch(e){ clearTimeout(tm); if(e&&e.name==='AbortError') throw new Error(`下載 ${entry.file} 逾時（15 秒沒有收到資料${retry?'，重試後仍然失敗':''}），請重新整理再試一次`); throw e; }
+}
+const BOARD_SHOW=new Set();   // 背景下載中、但畫面正在等它的檔案：顯示下載進度
 // keep the nodes that still exist and are still connected to the chosen start
 function carryBuild(prevAlloc,prevPicks){
   const st=board.startIds.find(x=>prevAlloc.includes(x)); alloc=new Set(); picks=new Map();
@@ -1869,6 +1964,8 @@ function skPickLv(s,manual,st){ const L=skLevels(s); if(!L.length) return null; 
 const fmtN=v=>typeof v==='number'?String(+v.toFixed(2)):(v==null?'?':String(v));
 const effAt=(s,r)=>String(s.effect||'').replace(/\{(\d+)\}/g,(_,i)=>fmtN((r&&r.v||[])[+i]));
 // 位移格：消耗 MP 改為消耗 EP（去掉原本括號裡的位移槽說明）
+// 顯示用（其他語言）：先翻譯效果模板再代入數值；計算仍用上面的中文版本
+const effShow=(s,r,ep)=>{ if(!KO()){ const e=effAt(s,r); return ep?toEP(e):e; } let t=T(String(s.effect||'')); if(ep) t=I18N.ep(t); return t.replace(/\{(\d+)\}/g,(_,i)=>fmtN((r&&r.v||[])[+i])); };
 const toEP=t=>t.replace(/消耗MP\s*([\d.]+)\s*[(（]\s*位移槽\s*[:：]\s*EP\s*[\d.]+\s*[)）]/g,'消耗EP$1').replace(/消耗MP/g,'消耗EP');
 const reqTxt=(r,st)=>{ const q=r.req||{}, out=[]; const c=(v,have,lbl)=>{ if(!v) return; out.push(`<span${v>have?' style="color:var(--warn)"':''}>${lbl==='Lv.'?'Lv.'+v:lbl+' '+v}</span>`); };
   c(q.level,st.level,'Lv.'); for(const [k,l] of SK_ATTR) c(q[k],st[k],l); return out.join(' | ')||'無需求'; };
@@ -1915,6 +2012,7 @@ function skResInfo(sk,r,row){ if(!r) return '';
     return `<span class="rs">（消耗 ${u} ${fmtN(fin)}）</span>`; }
   return ''; }
 const runeEff=r=>r.effect?String(r.effect).replace(/\{(\d+)\}/g,(_,i)=>fmtN((r.values||[])[+i])):'（尚無效果資料）';
+const runeShow=r=>!KO()?runeEff(r):(r.effect?String(T(r.effect)).replace(/\{(\d+)\}/g,(_,i)=>fmtN((r.values||[])[+i])):T('（尚無效果資料）'));   // 顯示用
 // 符文可放：相容標籤符合技能標籤（符文資料已補完，只列出相容的；之後有符文沒填相容標籤時也不會出現）
 const RUNE_STRICT=true;
 // 相容標籤寫法（每一項符合任一即可）：
@@ -1972,7 +2070,7 @@ function skRender(){
     const sk=WK.byId.get(x.id); if(!sk) return `<div class="sk-info"><span class="hint" style="color:var(--warn)">此版本（${esc(WK.ver)}）沒有 ${esc(x.id)}</span></div>`;
     const pk=skPickLv(sk,x.lv,st), ap=skPickLv(sk,0,st), L=skLevels(sk);
     const sel=L.length?`<select data-lv="${where}" aria-label="技能等級"><option value="0">自動（Lv.${ap?ap.r.lv:'—'}）</option>${L.map(r=>`<option value="${r.lv}"${x.lv===r.lv?' selected':''}>Lv.${r.lv}${sk.maxLevel&&r.lv>sk.maxLevel?'（加成）':''}</option>`).join('')}</select>`:'';
-    let ef=pk?effAt(sk,pk.r):''; if(where==='move') ef=toEP(ef);
+    const ef=pk?effShow(sk,pk.r,where==='move'):'';
     const kind=sk.kind==='passive'?'被動':'主動';
     let rn='';
     if(where!=='move'){ const row=skCfg.rows[+where]; const names=row.runes.map((id,j)=>{ if(!id) return null; const r=WK.byId.get(id); return r?`<span class="${runeFits(r,sk)&&!rowClash(row,r,j).length?'':'bad'}">${esc(r.name)}</span>`:`<span class="bad">${esc(id)}</span>`; }).filter(Boolean);
@@ -2056,7 +2154,7 @@ function skOpenPick(ctx){ skPickCtx=ctx; $('skPick').hidden=false; $('skPickQ').
   skPickList(); setTimeout(()=>$('skPickQ').focus(),0); }
 let skPickTab='all';
 function skPickList(){ const c=skPickCtx; if(!c||!WK) return; const q=$('skPickQ').value.trim().toLowerCase();
-  const hit=x=>!q||[x.name,x.desc,x.source,...(x.tags||[]),...(x.compatTags||[])].join(' ').toLowerCase().includes(q);
+  const hit=x=>{ if(!q) return true; const a=[x.name,x.desc,x.source,...(x.tags||[]),...(x.compatTags||[])]; return (KO()?[...a,...a.map(T)]:a).join(' ').toLowerCase().includes(q); };
   let list, used=new Set();
   if(c.type==='skill'){ list=WK.skills.filter(s=>c.where==='move'?isMove(s):(skPickTab==='all'||(skPickTab==='passive')===(s.kind==='passive')));
     [skCfg.move.id,...skCfg.rows.map(r=>r.id)].forEach(id=>id&&used.add(id)); }
@@ -2069,7 +2167,7 @@ function skPickList(){ const c=skPickCtx; if(!c||!WK) return; const q=$('skPickQ
   const crow=c.type==='rune'?skCfg.rows[c.where]:null;
   $('skPickList').innerHTML=list.length?list.map(x=>{ const clash=crow?rowClash(crow,x,c.r):[]; const dis=(used.has(x.id)&&x.id!==cur)||clash.length>0;
     const why=clash.length?`不可與「${clash.map(o=>o.name).join('」、「')}」同時串聯`:'已經放在其他位置';
-    const sub=x.kind==='rune'?runeEff(x):((x.tags||[]).map(t=>`【${t}】`).join('')||x.desc||'');
+    const sub=x.kind==='rune'?runeShow(x):((x.tags||[]).map(t=>`【${t}】`).join('')||T(x.desc||''));
     const mt=x.kind==='rune'?runeMatch(x,WK.byId.get(skCfg.rows[c.where].id)):[];
     return `<button class="sk-opt${mt.length?' fit':''}" data-id="${x.id}" data-tip="${x.id}"${dis?` disabled title="${esc(why)}"`:''}>${mt.length?`<em class="fit-tag">${mt.map(t=>`【${esc(t)}】`).join('')}</em>`:''}<span class="ic">${skIcon(x)}</span><span><b>${esc(x.name)}${x.id===cur?'（目前）':''}</b><small${clash.length?' style="color:var(--warn)"':''}>${esc(clash.length?why:sub)}</small></span></button>`; }).join('')
     :`<div class="sk-empty">${c.type==='rune'?'沒有可搭配這個技能的符文':'沒有符合的技能'}</div>`;
@@ -2083,14 +2181,14 @@ function skChoose(id){ const c=skPickCtx; if(!c) return;
   skClosePick(); }
 // ---- 提示框 ----
 function skTipHTML(id,ep){ const x=WK&&WK.byId.get(id); if(!x) return '';
-  if(x.kind==='rune') return `<div class="h">符文：${esc(x.name)}</div><div class="d">${esc(runeEff(x))}</div>${(x.compatTags||[]).length?`<div class="m">相容標籤：${x.compatTags.map(t=>`【${esc(t)}】`).join('')}</div>`:'<div class="m">相容標籤：（資料未填）</div>'}${x.source?`<div class="m">獲得方式：${esc(x.source).replace(/\n/g,'<br>')}</div>`:''}`;
+  if(x.kind==='rune') return `<div class="h">符文：${esc(x.name)}</div><div class="d">${esc(runeShow(x))}</div>${(x.compatTags||[]).length?`<div class="m">相容標籤：${x.compatTags.map(t=>`【${esc(t)}】`).join('')}</div>`:'<div class="m">相容標籤：（資料未填）</div>'}${x.source?`<div class="m">獲得方式：${esc(T(x.source)).replace(/\n/g,'<br>')}</div>`:''}`;
   const st=skStats(); const where=skCfg.move.id===id?skCfg.move:skCfg.rows.find(r=>r.id===id); const pk=skPickLv(x,where?where.lv:0,st);
-  let ef=pk?effAt(x,pk.r):''; if(ep) ef=toEP(ef);
+  const ef=pk?effShow(x,pk.r,ep):'';
   return `<div class="h">${esc(x.name)}</div>${(x.tags||[]).length?`<div class="tg">${x.tags.map(t=>`【${esc(t)}】`).join('')}</div>`:''}
     <div class="m">${x.maxLevel?`[等級上限:${x.maxLevel}]　`:''}${(x.weapons||[]).length?`需求武器: ${esc(x.weapons.join('/'))}`:'需求武器: 無'}</div>
-    ${x.desc?`<div class="d">${esc(x.desc).replace(/\n/g,'<br>')}</div>`:''}
+    ${x.desc?`<div class="d">${esc(T(x.desc)).replace(/\n/g,'<br>')}</div>`:''}
     ${pk?`<div class="m">[Lv.${pk.r.lv}] 需求：${reqTxt(pk.r,st)}</div><div class="e">${esc(ef)}</div>`:''}
-    ${x.source?`<div class="m">獲得方式：${esc(x.source).replace(/\n/g,'<br>')}</div>`:''}`; }
+    ${x.source?`<div class="m">獲得方式：${esc(T(x.source)).replace(/\n/g,'<br>')}</div>`:''}`; }
 function skTipMove(ev){ const t=$('skTipBox'), w=t.offsetWidth, h=t.offsetHeight, m=14; let x=ev.clientX+m, y=ev.clientY+m;
   if(x+w>innerWidth-8) x=ev.clientX-w-m; if(y+h>innerHeight-8) y=Math.max(8,innerHeight-h-8); t.style.left=Math.max(8,x)+'px'; t.style.top=y+'px'; }
 
@@ -2188,7 +2286,7 @@ function renderNote(){
   $('noteFlag2').textContent=(tab?tab.name+' · ':'')+(cur?`${cur.length} 字`:'尚未填寫'); $('noteFlag2').classList.toggle('none',!cur);
   const tb=$('noteTabs'); tb.hidden=!stages.length;
   if(stages.length) tb.innerHTML=[null,...stages].map((t,i)=>`<button role="tab" data-i="${i-1}" aria-selected="${t===tab}" class="${t===tab?'on':''}${noteGet(t)?' has':''}${t&&t===ctx?' cur':''}"${t&&t===ctx?' title="目前配點"':''}>${t?esc(t.name):'總備註'}</button>`).join('');
-  const v=$('noteView'); v.classList.toggle('empty',!cur); v.innerHTML=cur?linkify(cur):NOTE_HELP.replace('尚未填寫備註',tab?`「${esc(tab.name)}」尚未填寫備註`:'尚未填寫總備註');
+  const v=$('noteView'); v.classList.toggle('empty',!cur); v.toggleAttribute('data-noi18n',!!cur);   // 玩家寫的備註不翻譯 v.innerHTML=cur?linkify(cur):NOTE_HELP.replace('尚未填寫備註',tab?`「${esc(tab.name)}」尚未填寫備註`:'尚未填寫總備註');
   $('noteEditBtn').textContent=cur?'編輯':'新增備註';
   $('noteView').hidden=noteEditing; $('noteText').hidden=!noteEditing; $('noteViewBtns').hidden=noteEditing; $('noteEditBtns').hidden=!noteEditing;
   $('noteCount').textContent=noteEditing?`${$('noteText').value.length} / ${NOTE_MAX}　Ctrl+Enter 儲存 · Esc 取消`:(noteAuto&&tot?'別人讀取這份流派時會自動開啟備註':'');
@@ -2432,16 +2530,25 @@ $('shLoad').onclick=async()=>{ const v=$('shIn').value; if(!v.trim()){ toast('�
   try{ await loadShare(v); $('shIn').value=''; }catch(e){ showAlert('無法讀取分享碼',esc(e.message)); } };
 $('shIn').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); $('shLoad').click(); } });
 // 短網址：?s=代號 → 向短網址服務取回分享碼再讀取
+// 短網址代號：?s=代號；也接受少打 s 的 ?=代號、?代號
+function shortIdFromUrl(){ const q=new URLSearchParams(location.search); if(q.has('s')) return q.get('s');
+  if(q.has('')&&SHORT_ID_RE.test(q.get(''))) return q.get(''); for(const [k,v] of q) if(!v&&SHORT_ID_RE.test(k)) return k; return null; }
+function cleanShortUrl(){ const u=new URL(location.href); const id=shortIdFromUrl(); u.searchParams.delete('s'); u.searchParams.delete(''); if(id) u.searchParams.delete(id); history.replaceState(null,'',u.pathname+u.search+u.hash); }
+// 向短網址服務取回分享碼（逾時 12 秒）
+async function fetchShortCode(id){
+  if(!SHORT_ID_RE.test(id)) throw new Error('短網址代號格式不正確，請確認連結是否複製完整');
+  if(!SHORT_API) throw new Error('這個頁面沒有設定短網址服務，無法讀取短網址');
+  const ac=typeof AbortController!=='undefined'?new AbortController():null, t=ac&&setTimeout(()=>ac.abort(),12000);
+  let r; try{ r=await fetch(shortApi()+'/s/'+id,ac?{signal:ac.signal}:{}); }catch(e){ throw new Error(e&&e.name==='AbortError'?'短網址服務回應逾時（超過 12 秒），請重新整理再試一次，或請對方改傳長網址':'無法連線到短網址服務，請稍後再試，或請對方改傳長網址'); }
+  finally{ if(t) clearTimeout(t); }
+  if(r.status===404) throw new Error('找不到這個短網址（代號錯誤，或資料已被刪除）');
+  if(!r.ok) throw new Error('短網址服務錯誤（HTTP '+r.status+'），請稍後再試');
+  return r.text(); }
 async function loadShareFromQuery(){
-  const id=new URLSearchParams(location.search).get('s'); if(id==null) return false;
-  const clean=()=>{ const u=new URL(location.href); u.searchParams.delete('s'); history.replaceState(null,'',u.pathname+u.search+u.hash); };
+  const id=shortIdFromUrl(); if(id==null) return false;
+  const clean=cleanShortUrl;
   try{
-    if(!SHORT_ID_RE.test(id)) throw new Error('短網址代號格式不正確，請確認連結是否複製完整');
-    if(!SHORT_API) throw new Error('這個頁面沒有設定短網址服務，無法讀取短網址');
-    let r; try{ r=await fetch(shortApi()+'/s/'+id); }catch(e){ throw new Error('無法連線到短網址服務，請稍後再試，或請對方改傳長網址'); }
-    if(r.status===404) throw new Error('找不到這個短網址（代號錯誤，或資料已被刪除）');
-    if(!r.ok) throw new Error('短網址服務錯誤（HTTP '+r.status+'），請稍後再試');
-    await loadShare(await r.text()); clean(); return true;
+    await loadShare(await fetchShortCode(id)); clean(); return true;
   }catch(e){ clean(); showAlert('無法讀取短網址',esc(e.message)); return false; }
 }
 async function loadShareFromUrl(){ return (await loadShareFromHash())||(await loadShareFromQuery()); }
@@ -2470,9 +2577,10 @@ $('pgQuests').addEventListener('focusout',()=>setTimeout(()=>{ if(!$('pgQuests')
 /* ---------- talent search ---------- */
 let searchQ='', searchSet=new Set(), searchList=[], searchCur=null;
 const norm=s=>String(s||'').toLowerCase().replace(/[\s＋+]/g,'').replace(/％/g,'%');
-function nodeText(n){ const c=C(n); const parts=[dispName(n)];
+function nodeText(n){ const c=C(n); const parts=[dispName(n)]; if(KO()) parts.push(T(dispName(n)));   // 其他語言：中文與譯名都可搜尋
   for(const m of c.modifiers||[]) parts.push(fmtMod(m),m.stat);
   if(c.choice){ parts.push(c.choice.title,c.choice.prompt); for(const o of c.choice.options){ parts.push(o.label); for(const m of o.modifiers) parts.push(fmtMod(m),m.stat); } }
+  if(KO()&&c.choice) parts.push(T(c.choice.title),T(c.choice.prompt),...c.choice.options.map(o=>T(o.label)));
   return norm(parts.join('\n')); }
 function runSearch(){
   const raw=$('search').value.trim(); searchQ=raw;
@@ -2555,20 +2663,49 @@ async function runBench(){
 }
 if(BENCH) setTimeout(runBench,0);
 
+async function i18nBoot(){   // 讀語言檔（Wiki 的技能翻譯＋天賦翻譯）；讀不到就維持中文
+  const L=I18N.lang; $('langSel').value=L; $('langSel').addEventListener('change',e=>I18N.set(e.target.value));
+  if(L==='zh') return;
+  const load=src=>new Promise(res=>{ const el=document.createElement('script'); el.src=src; const t=setTimeout(()=>res(false),8000); el.onload=()=>{clearTimeout(t);res(true);}; el.onerror=()=>{clearTimeout(t);res(false);}; document.head.appendChild(el); });
+  ldStep('Loading language','i18n/'+L+'.js',null);
+  await Promise.all([load(WIKI_BASE+'data/i18n/'+L+'.js'),load('i18n/'+L+'.js')]);
+  const w=(window.LOOTANIA_I18N||{})[L]||{}, t=(window.LOOTANIA_TALENT_I18N||{})[L];
+  if(!t){ console.warn('[i18n] 找不到 i18n/'+L+'.js'); $('langSel').value='zh'; I18N.load(null); return; }
+  I18N.load({ data:{...(w.data||{}),...(w.ui||{}),...(t.data||{})}, ui:t.ui||{}, patterns:[...(t.patterns||[]),...(w.patterns||[])], punct:t.punct||w.punct, ep:t.ep||[] });
+  I18N.start();
+}
 async function boot(){
-  const fail=msg=>{ ldHide(); document.getElementById('stage').insertAdjacentHTML('beforeend',`<div class="picker" style="display:block"><div class="pk-title">無法載入天賦盤資料</div><div class="pk-prompt">${String(msg).replace(/[<>&]/g,'')}\n請確認 boards 資料夾和 index.html 放在一起，並透過網站（GitHub Pages 或本機伺服器）開啟，不要直接雙擊檔案。</div></div>`); };
+  await i18nBoot();
+  const fail=msg=>{ ldHide(); document.getElementById('stage').insertAdjacentHTML('beforeend',`<div class="picker" style="display:block"><div class="pk-title">無法載入天賦盤資料</div><div class="pk-prompt">${String(msg).replace(/[<>&]/g,'')}\n請確認 boards 資料夾和 index.html 放在一起，並透過網站（GitHub Pages 或本機伺服器）開啟，不要直接雙擊檔案。</div><div style="margin-top:10px;text-align:right"><button onclick="location.reload()">重新整理</button></div></div>`); };
+  // 有分享連結時：和版本清單同時開始讀取分享碼，並直接下載分享碼的天賦版本（不先下載上次用的版本再切換）
+  const shId=shortIdFromUrl(), shHash=SH_RE.test(decodeURIComponent(location.hash.slice(1)))?decodeURIComponent(location.hash.slice(1)):null;
+  const shP=shHash?decodeShareZ(shHash):shId!=null?fetchShortCode(shId).then(decodeShareZ):null;
+  if(shP) shP.catch(()=>{});
   ldStep('讀取版本清單','boards/index.json',null);
-  try{ const r=await fetch('boards/index.json',{cache:'no-cache'}); if(!r.ok) throw new Error('boards/index.json：HTTP '+r.status);
+  try{ const ac=typeof AbortController!=='undefined'?new AbortController():null, tm=ac&&setTimeout(()=>ac.abort(),15000);
+    let r; try{ r=await fetch('boards/index.json',{cache:'no-cache',signal:ac?ac.signal:undefined}); }catch(e){ throw new Error(e&&e.name==='AbortError'?'讀取版本清單逾時（15 秒），請重新整理再試一次':(e.message||e)); } finally{ if(tm) clearTimeout(tm); }
+    if(!r.ok) throw new Error('boards/index.json：HTTP '+r.status);
     MANIFEST=await r.json(); MANIFEST.base='boards/'; if(!MANIFEST.boards||!MANIFEST.boards.length) throw new Error('boards/index.json 裡沒有任何版本'); }
   catch(e){ fail(e.message||e); return; }
   let s=null; try{ s=JSON.parse(localStorage.getItem(LS_B)||'null'); }catch(e){}
-  const v=(s&&s.boardVersion&&verEntry(s.boardVersion))?canonVer(s.boardVersion):latestVer();
-  try{ const data=await fetchBoard(verEntry(v)); data.version=verEntry(v).version; ldStep('建立盤面',`${v} · ${(data.nodes||[]).length} 個節點`,null); await ldTick(); useBoard(data,verEntry(v).file,false); }catch(e){ fail(e.message||e); return; }
+  let sh=null, shErr=null;
+  // 等分享碼的同時，先在背景下載最新版天賦盤（大部分分享都是最新版，等到後直接沿用）
+  if(shP&&verEntry(latestVer())) fetchBoard(verEntry(latestVer()),null,true).catch(()=>{});
+  if(shP){ const sub=shHash?'':shortApi().replace(/^https?:\/\//,'')+'/s/'+shId, t0=Date.now();
+    ldStep(shHash?'讀取分享碼':'讀取短網址',sub,null);
+    const tk=setInterval(()=>{ const n=Math.round((Date.now()-t0)/1000); if(n>=2) ldStep(shHash?'讀取分享碼':'讀取短網址',`${sub}　已等待 ${n} 秒（最多 12 秒）`,null); },1000);
+    try{ sh=await shP; }catch(e){ shErr=e; } finally{ clearInterval(tk); } }
+  // 有分享碼就以分享碼的版本為準；分享碼的版本已不存在時用最新版（不沿用上次的版本）
+  const pick=sh||s;
+  const v=(pick&&pick.boardVersion&&verEntry(pick.boardVersion))?canonVer(pick.boardVersion):latestVer();
+  try{ BOARD_SHOW.add(verEntry(v).file); const data=await fetchBoard(verEntry(v)); data.version=verEntry(v).version; ldStep('建立盤面',`${v} · ${(data.nodes||[]).length} 個節點`,null); await ldTick(); useBoard(data,verEntry(v).file,false); }catch(e){ fail(e.message||e); return; }
   if(s&&sameVer(s.boardVersion,board.version)) ldStep('讀取上次的流派',`${(s.alloc||[]).length} 個節點`,null);
   setTool('select'); setMode('play');
   if(s&&sameVer(s.boardVersion,board.version)){ try{ applyBuild(s,true); }catch(e){} }
-  if(/^LT[12]/.test(location.hash.slice(1))||new URLSearchParams(location.search).has('s')) ldStep('讀取分享碼','',null);
-  if(await loadShareFromUrl()) { render(); ldHide(); updFileState(); return; }
+  if(shP){
+    if(shHash) history.replaceState(null,'',location.pathname+location.search); else cleanShortUrl();
+    if(sh){ try{ ldStep('套用分享的流派',`${(sh.alloc||[]).length} 個節點`,null); await openBuild(sh); scheduleSave(); render(); ldHide(); updFileState(); return; }catch(e){ shErr=e; } }
+    if(shErr){ render(); ldHide(); updFileState(); showAlert(shHash?'無法讀取分享連結':'無法讀取短網址',esc(shErr.message||shErr)); return; } }
   render(); ldHide(); updFileState();
   offerLatest('boot');
 }
